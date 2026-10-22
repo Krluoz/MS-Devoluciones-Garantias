@@ -1,0 +1,74 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Eclipse / STS
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+### Logs
+*.log
+logs/
+
+### Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+### Local Spring configuration
+application.properties
+application-local.properties
+application-local.example.properties
+
+
+### Operating System
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+### Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+### Testing / coverage
+jacoco.exec
+coverage/
+
+### Docker local overrides
+docker-compose.override.yml
