@@ -50,9 +50,7 @@ logs/
 !.env.example
 
 ### Local Spring configuration
-application.properties
 application-local.properties
-application-local.example.properties
 
 
 ### Operating System
