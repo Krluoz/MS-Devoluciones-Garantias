@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
 
 @Service
 public class ReturnRequestService {
@@ -75,6 +78,27 @@ public class ReturnRequestService {
 
     public Optional<ReturnRequest> obtenerSolicitudPorId(Long id) {
         return returnRequestRepository.findById(id);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReturnSummaryDTO> obtenerSolicitudesPorUsuario(
+            Long userId,
+            Pageable pageable) {
+
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException(
+                    "El identificador del usuario no es válido.");
+        }
+
+        return returnRequestRepository
+                .findByUserId(userId, pageable)
+                .map(request -> new ReturnSummaryDTO(
+                        request.getId(),
+                        request.getOrderId(),
+                        request.getStatus(),
+                        request.getCreatedAt(),
+                        request.getUpdatedAt()
+                ));
     }
 }
 
