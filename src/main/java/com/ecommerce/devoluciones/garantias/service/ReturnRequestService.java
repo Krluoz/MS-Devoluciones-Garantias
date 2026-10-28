@@ -18,20 +18,26 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
+import java.util.NoSuchElementException;
+import com.ecommerce.devoluciones.garantias.model.ReturnStatusHistory;
+import com.ecommerce.devoluciones.garantias.repository.ReturnStatusHistoryRepository;
 
 @Service
 public class ReturnRequestService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnBusinessRepository returnBusinessRepository;
     private final OrderGateway orderGateway;
+    private final ReturnStatusHistoryRepository returnStatusHistoryRepository;
 
     private static final long PLAZO_DEVOLUCION_DIAS = 30;
 
 
-    public ReturnRequestService(ReturnRequestRepository returnRequestRepository, ReturnBusinessRepository returnBusinessRepository, OrderGateway orderGateway) {
+    public ReturnRequestService(ReturnRequestRepository returnRequestRepository, ReturnBusinessRepository returnBusinessRepository, OrderGateway orderGateway, 
+                                ReturnStatusHistoryRepository returnStatusHistoryRepository) {
         this.returnRequestRepository = returnRequestRepository;
         this.returnBusinessRepository = returnBusinessRepository;
         this.orderGateway = orderGateway;
+        this.returnStatusHistoryRepository = returnStatusHistoryRepository;
     }
 
     // Creamos una solicitud de devolución
@@ -203,10 +209,67 @@ public class ReturnRequestService {
                         request.getUpdatedAt()
                 ));
     }
+  
+    @Transactional
+    public ReturnRequest registrarRecepcion(Long id) {
+        // 1. Buscamos la devolución por su ID (reutilizando el repositorio de Carlos)
+        ReturnRequest request = returnRequestRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró la solicitud de devolución con ID " + id));
+        // 2. Regla de negocio del PDF: solo avanza si ya fue aprobada
+        if (request.getStatus() != Status.APROBADO) {
+            throw new IllegalArgumentException(
+                    "No se puede registrar la recepción. La devolución debe estar en estado APROBADO, pero actualmente está en: " + request.getStatus());
+        }
+        // 3. Cambiamos el estado a RECIBIDO
+        request.setStatus(Status.RECIBIDO);
+        // 4. Guardamos en MySQL y retornamos el resultado
+        return returnRequestRepository.save(request);
+
+    }
+
+    @Transactional
+    public void decidirDevolucion(
+            Long id,
+            Status decision,
+            String administrador) {
+
+        // 1. Validar la decisión
+        if (decision != Status.APROBADO &&
+                decision != Status.RECHAZADO) {
+
+            throw new IllegalArgumentException(
+                    "La decisión debe ser APROBADO o RECHAZADO");
+        }
+
+        // 2. Buscar la devolución
+        ReturnRequest request = returnRequestRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "No se encontró la devolución con ID: " + id));
+
+        // 3. Validar que esté pendiente
+        if (request.getStatus() != Status.PENDIENTE) {
+            throw new IllegalStateException(
+                    "Solo se pueden decidir devoluciones PENDIENTES. " +
+                            "Estado actual: " + request.getStatus());
+        }
+
+        // 4. Obtener el estado anterior
+        Status estadoAnterior = request.getStatus();
+
+        // 5. Actualizar la devolución
+        request.setStatus(decision);
+
+        returnRequestRepository.save(request);
+
+        // 6. Crear el registro del historial
+        ReturnStatusHistory historial = new ReturnStatusHistory(
+                request,
+                estadoAnterior,
+                decision,
+                administrador
+        );
+
+        // 7. Guardar el historial
+        returnStatusHistoryRepository.save(historial);
+    }
 }
-
-
-
-
-
-

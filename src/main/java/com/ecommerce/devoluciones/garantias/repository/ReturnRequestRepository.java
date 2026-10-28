@@ -9,6 +9,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Optional;
 
 public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long> {
     Page<ReturnRequest> findByUserId(
@@ -28,5 +34,8 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
             @Param("itemId") Integer itemId,
             @Param("statuses") Collection<Status> statuses
     );
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM ReturnRequest r WHERE r.id = :id")
+    Optional<ReturnRequest> findByIdForUpdate(@Param("id") Long id);
 
 }
