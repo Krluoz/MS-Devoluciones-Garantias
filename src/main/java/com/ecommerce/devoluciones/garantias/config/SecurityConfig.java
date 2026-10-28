@@ -18,10 +18,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         // Solo los administradores pueden  aprobar o rechazar devoluciones
-                        .requestMatchers("/api/v1/admin/returns/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/returns/**").hasRole("ADMIN")
                         // Los usuarios autenticados pueden consultar sus propias devoluciones
-                        .requestMatchers(HttpMethod.GET, "/api/v1/returns/me").hasAnyRole("USER")
-                        .requestMatchers("/api/v1/returns/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/returns/me").hasAnyRole("USER")
+                        .requestMatchers("/api/returns/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .httpBasic(Customizer.withDefaults());

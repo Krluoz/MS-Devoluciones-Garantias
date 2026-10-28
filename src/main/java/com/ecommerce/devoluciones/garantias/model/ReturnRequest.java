@@ -46,9 +46,4 @@ public class ReturnRequest {
     @JsonManagedReference
     private List<ReturnItem> items = new ArrayList<>();
 
-
-    public ReturnRequest(Long orderId, Long userId) {
-        this.orderId = orderId;
-        this.userId = userId;
-    }
 }

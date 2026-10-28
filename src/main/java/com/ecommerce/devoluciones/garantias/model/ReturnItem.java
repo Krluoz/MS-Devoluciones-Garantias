@@ -36,12 +36,4 @@ public class ReturnItem {
     @Column(name = "reason", nullable = false, length = 50)
     private ReturnReason reason;
 
-
-    public ReturnItem(ReturnRequest returnRequest, Integer itemId, String itemName, Integer quantity, ReturnReason reason) {
-        this.returnRequest = returnRequest;
-        this.itemId = itemId;
-        this.itemName = itemName;
-        this.quantity = quantity;
-        this.reason = reason;
-    }
 }
