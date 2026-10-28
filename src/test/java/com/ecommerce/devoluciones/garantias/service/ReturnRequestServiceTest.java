@@ -1,406 +1,350 @@
-
 package com.ecommerce.devoluciones.garantias.service;
 
 import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
 import com.ecommerce.devoluciones.garantias.gateway.OrderGateway;
+import com.ecommerce.devoluciones.garantias.gateway.OrderInfo;
+import com.ecommerce.devoluciones.garantias.model.ReturnItem;
+import com.ecommerce.devoluciones.garantias.model.ReturnReason;
 import com.ecommerce.devoluciones.garantias.model.ReturnRequest;
+import com.ecommerce.devoluciones.garantias.model.ReturnStatusHistory;
 import com.ecommerce.devoluciones.garantias.model.Status;
 import com.ecommerce.devoluciones.garantias.repository.ReturnBusinessRepository;
 import com.ecommerce.devoluciones.garantias.repository.ReturnRequestRepository;
-
+import com.ecommerce.devoluciones.garantias.repository.ReturnStatusHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-
-import com.ecommerce.devoluciones.garantias.repository.ReturnStatusHistoryRepository;
-import com.ecommerce.devoluciones.garantias.model.ReturnStatusHistory;
-import org.mockito.ArgumentCaptor;
-import java.util.NoSuchElementException;
 
 class ReturnRequestServiceTest {
 
     private ReturnRequestRepository returnRequestRepository;
-    private ReturnRequestService returnRequestService;
+    private ReturnBusinessRepository returnBusinessRepository;
     private OrderGateway orderGateway;
     private ReturnStatusHistoryRepository returnStatusHistoryRepository;
+    private ReturnRequestService service;
 
     @BeforeEach
     void setUp() {
 
-        returnRequestRepository =
-                mock(ReturnRequestRepository.class);
-
-        ReturnBusinessRepository returnBusinessRepository =
-                mock(ReturnBusinessRepository.class);
-
+        returnRequestRepository = mock(ReturnRequestRepository.class);
+        returnBusinessRepository = mock(ReturnBusinessRepository.class);
         orderGateway = mock(OrderGateway.class);
-        returnStatusHistoryRepository =
-                mock(ReturnStatusHistoryRepository.class);
+        returnStatusHistoryRepository = mock(ReturnStatusHistoryRepository.class);
+        service = new ReturnRequestService(returnRequestRepository,
+                returnBusinessRepository, orderGateway, returnStatusHistoryRepository);
+    }
 
-        returnRequestService = new ReturnRequestService(
-                returnRequestRepository,
-                returnBusinessRepository,
-                orderGateway
-                returnStatusHistoryRepository
-        );
+    private ReturnRequest requestWithItems(int... quantities) {
+        ReturnRequest request = new ReturnRequest();
+        request.setOrderId(100L);
+        request.setUserId(1L);
+        java.util.ArrayList<ReturnItem> items = new java.util.ArrayList<>();
+        for (int quantity : quantities) {
+            ReturnItem item = new ReturnItem();
+            item.setItemId(25);
+            item.setQuantity(quantity);
+            item.setReason(ReturnReason.ITEM_DEFECTUOSO);
+            items.add(item);
+        }
+        request.setItems(items);
+        return request;
+    }
+
+    private void mockValidOrder() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 1L, LocalDateTime.now().minusDays(2), List.of())));
+        when(returnBusinessRepository.pedidoValido(100L, 1L)).thenReturn(true);
+        when(returnBusinessRepository.obtenerProductoDelPedido(100L, 25L))
+                .thenAnswer(invocation -> List.of("Teclado mecánico", 2));
+        when(returnRequestRepository.sumarCantidadSolicitada(eq(100L), eq(25), anyCollection()))
+                .thenReturn(0L);
+        when(returnRequestRepository.save(any(ReturnRequest.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
-    void debeConsultarDevolucionesDelUsuario101() {
+    void crearSolicitud_validaAsociaArticulosYGuardaComoPendiente() {
+        mockValidOrder();
+        ReturnRequest request = requestWithItems(1);
 
-        // Arrange: preparar los datos de prueba
-        Long userId = 101L;
-        Pageable pageable = PageRequest.of(0, 10);
+        ReturnRequest result = service.crearSolicitud(request);
 
-        ReturnRequest solicitud = new ReturnRequest();
-        solicitud.setId(1L);
-        solicitud.setOrderId(1001L);
-        solicitud.setUserId(101L);
-        solicitud.setStatus(Status.PENDIENTE);
+        assertSame(request, result);
+        assertEquals(Status.PENDIENTE, result.getStatus());
+        assertEquals("Teclado mecánico", result.getItems().get(0).getItemName());
+        assertSame(request, result.getItems().get(0).getReturnRequest());
+        verify(returnRequestRepository).save(request);
+        verify(returnRequestRepository).sumarCantidadSolicitada(eq(100L), eq(25), anyCollection());
+    }
 
-        Page<ReturnRequest> pagina =
-                new PageImpl<>(List.of(solicitud), pageable, 1);
+    @Test
+    void crearSolicitud_agrupaArticulosRepetidosYAsignaNombreATodos() {
+        mockValidOrder();
+        ReturnRequest request = requestWithItems(1, 1);
 
-        when(returnRequestRepository.findByUserId(userId, pageable))
-                .thenReturn(pagina);
+        service.crearSolicitud(request);
 
-        // Act: ejecutar el método que queremos probar
-        Page<ReturnSummaryDTO> resultado =
-                returnRequestService.obtenerSolicitudesPorUsuario(
-                        userId, pageable);
-
-        // Assert: verificar los resultados
-        assertEquals(1, resultado.getTotalElements());
-        assertEquals(1L, resultado.getContent().get(0).id());
-        assertEquals(1001L, resultado.getContent().get(0).orderId());
-        assertEquals(Status.PENDIENTE,
-                resultado.getContent().get(0).status());
-
+        assertEquals(2, request.getItems().size());
+        assertTrue(request.getItems().stream().allMatch(i -> "Teclado mecánico".equals(i.getItemName())));
+        assertTrue(request.getItems().stream().allMatch(i -> i.getReturnRequest() == request));
         verify(returnRequestRepository, times(1))
-                .findByUserId(userId, pageable);
+                .sumarCantidadSolicitada(eq(100L), eq(25), anyCollection());
     }
 
     @Test
-    void debeDevolverPaginaVaciaCuandoNoHayDevoluciones() {
-
-        Long userId = 102L;
-        Pageable pageable = PageRequest.of(0, 10);
-
-        when(returnRequestRepository.findByUserId(userId, pageable))
-                .thenReturn(Page.empty(pageable));
-
-        Page<ReturnSummaryDTO> resultado =
-                returnRequestService.obtenerSolicitudesPorUsuario(
-                        userId, pageable);
-
-        assertTrue(resultado.isEmpty());
-        assertEquals(0, resultado.getTotalElements());
-
-        verify(returnRequestRepository, times(1))
-                .findByUserId(userId, pageable);
+    void crearSolicitud_rechazaPedidoInexistente() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.empty());
+        assertEquals("El pedido no existe.", assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage());
+        verifyNoInteractions(returnBusinessRepository);
+        verify(returnRequestRepository, never()).save(any());
     }
 
     @Test
-    void debeRechazarUserIdNulo() {
+    void crearSolicitud_rechazaPedidoDeOtroUsuario() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 2L, LocalDateTime.now().minusDays(2), List.of())));
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("no pertenece"));
+        verifyNoInteractions(returnBusinessRepository);
+    }
 
+    @Test
+    void crearSolicitud_rechazaPedidoSinFechaDeCompra() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(new OrderInfo(100L, 1L, null, List.of())));
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("no tiene fecha"));
+        verifyNoInteractions(returnBusinessRepository);
+    }
+
+    @Test
+    void crearSolicitud_rechazaCompraFueraDePlazo() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 1L, LocalDateTime.now().minusDays(31), List.of())));
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("más de 30 días"));
+        verifyNoInteractions(returnBusinessRepository);
+    }
+
+    @Test
+    void crearSolicitud_rechazaPedidoInvalidadoPorRepositorioDeNegocio() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 1L, LocalDateTime.now().minusDays(2), List.of())));
+        when(returnBusinessRepository.pedidoValido(100L, 1L)).thenReturn(false);
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("cancelado"));
+        verify(returnRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void crearSolicitud_rechazaListaDeArticulosNulaOVacia() {
+        mockValidOrder();
+        ReturnRequest nullItems = requestWithItems(1);
+        nullItems.setItems(null);
+        assertThrows(IllegalArgumentException.class, () -> service.crearSolicitud(nullItems));
+
+        ReturnRequest emptyItems = requestWithItems(1);
+        emptyItems.setItems(List.of());
+        assertThrows(IllegalArgumentException.class, () -> service.crearSolicitud(emptyItems));
+        verify(returnRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void crearSolicitud_rechazaArticuloYaSolicitadoEnEstadoActivo() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 1L, LocalDateTime.now().minusDays(2), List.of())));
+        when(returnBusinessRepository.pedidoValido(100L, 1L)).thenReturn(true);
+        when(returnRequestRepository.sumarCantidadSolicitada(eq(100L), eq(25), anyCollection()))
+                .thenReturn(1L);
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("Ya existe una solicitud"));
+        verify(returnBusinessRepository, never()).obtenerProductoDelPedido(anyLong(), anyLong());
+    }
+
+    @Test
+    void crearSolicitud_rechazaProductoQueNoPerteneceAlPedido() {
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 1L, LocalDateTime.now().minusDays(2), List.of())));
+        when(returnBusinessRepository.pedidoValido(100L, 1L)).thenReturn(true);
+        when(returnRequestRepository.sumarCantidadSolicitada(eq(100L), eq(25), anyCollection())).thenReturn(0L);
+        when(returnBusinessRepository.obtenerProductoDelPedido(100L, 25L)).thenReturn(List.of());
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("no pertenece"));
+        verify(returnRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void crearSolicitud_rechazaCantidadMayorAUnidadesDisponibles() {
+        mockValidOrder();
+        ReturnRequest request = requestWithItems(3);
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.crearSolicitud(request)).getMessage().contains("supera las unidades disponibles"));
+        verify(returnRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void obtenerSolicitudPorId_delegaAlRepositorio() {
+        ReturnRequest request = new ReturnRequest();
+        when(returnRequestRepository.findById(9L)).thenReturn(Optional.of(request));
+        assertSame(request, service.obtenerSolicitudPorId(9L).orElseThrow());
+        when(returnRequestRepository.findById(10L)).thenReturn(Optional.empty());
+        assertTrue(service.obtenerSolicitudPorId(10L).isEmpty());
+    }
+
+    @Test
+    void obtenerSolicitudesPorUsuario_mapeaLaPaginaAResumenes() {
         Pageable pageable = PageRequest.of(0, 10);
+        ReturnRequest request = new ReturnRequest();
+        request.setId(1L);
+        request.setOrderId(100L);
+        request.setUserId(1L);
+        request.setStatus(Status.PENDIENTE);
+        request.setCreatedAt(LocalDateTime.now().minusHours(2));
+        request.setUpdatedAt(LocalDateTime.now());
+        when(returnRequestRepository.findByUserId(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(request), pageable, 1));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> returnRequestService.obtenerSolicitudesPorUsuario(
-                        null, pageable)
-        );
+        Page<ReturnSummaryDTO> result = service.obtenerSolicitudesPorUsuario(1L, pageable);
 
-        assertEquals(
-                "El identificador del usuario no es válido.",
-                exception.getMessage()
-        );
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1L, result.getContent().get(0).id());
+        assertEquals(100L, result.getContent().get(0).orderId());
+        assertEquals(Status.PENDIENTE, result.getContent().get(0).status());
+        assertEquals(request.getCreatedAt(), result.getContent().get(0).createdAt());
+        assertEquals(request.getUpdatedAt(), result.getContent().get(0).updatedAt());
+    }
 
+    @Test
+    void obtenerSolicitudesPorUsuario_rechazaIdsInvalidos() {
+        Pageable pageable = PageRequest.of(0, 10);
+        assertThrows(IllegalArgumentException.class, () -> service.obtenerSolicitudesPorUsuario(null, pageable));
+        assertThrows(IllegalArgumentException.class, () -> service.obtenerSolicitudesPorUsuario(0L, pageable));
+        assertThrows(IllegalArgumentException.class, () -> service.obtenerSolicitudesPorUsuario(-1L, pageable));
         verifyNoInteractions(returnRequestRepository);
     }
 
     @Test
-    void debeRechazarUserIdNegativo() {
-
+    void obtenerSolicitudesPorUsuario_devuelvePaginaVacia() {
         Pageable pageable = PageRequest.of(0, 10);
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> returnRequestService.obtenerSolicitudesPorUsuario(
-                        -1L, pageable)
-        );
-
-        verifyNoInteractions(returnRequestRepository);
-    }
-    @Test
-    void debeRegistrarRecepcionCuandoSolicitudEstaAprobada() {
-        ReturnRequest solicitud = new ReturnRequest();
-        solicitud.setId(1L);
-        solicitud.setStatus(Status.APROBADO);
-
-        when(returnRequestRepository.findById(1L)).thenReturn(Optional.of(solicitud));
-        when(returnRequestRepository.save(any(ReturnRequest.class))).thenAnswer(i -> i.getArgument(0));
-
-        ReturnRequest resultado = returnRequestService.registrarRecepcion(1L);
-
-        assertEquals(Status.RECIBIDO, resultado.getStatus());
-        verify(returnRequestRepository, times(1)).save(solicitud);
+        when(returnRequestRepository.findByUserId(101L, pageable)).thenReturn(Page.empty(pageable));
+        assertTrue(service.obtenerSolicitudesPorUsuario(101L, pageable).isEmpty());
     }
 
     @Test
-    void debeLanzarExcepcionCuandoSolicitudEstaRechazada() {
-        ReturnRequest solicitud = new ReturnRequest();
-        solicitud.setId(3L);
-        solicitud.setStatus(Status.RECHAZADO);
+    void registrarRecepcion_cambiaARecibidoCuandoEstaAprobada() {
+        ReturnRequest request = new ReturnRequest();
+        request.setStatus(Status.APROBADO);
+        when(returnRequestRepository.findById(5L)).thenReturn(Optional.of(request));
+        when(returnRequestRepository.save(request)).thenReturn(request);
+        assertSame(request, service.registrarRecepcion(5L));
+        assertEquals(Status.RECIBIDO, request.getStatus());
+        verify(returnRequestRepository).save(request);
+    }
 
-        when(returnRequestRepository.findById(3L)).thenReturn(Optional.of(solicitud));
-
-        IllegalArgumentException excepcion = assertThrows(
-                IllegalArgumentException.class,
-                () -> returnRequestService.registrarRecepcion(3L)
-        );
-
-        assertTrue(excepcion.getMessage().contains("La devolución debe estar en estado APROBADO"));
+    @Test
+    void registrarRecepcion_fallaSiNoExisteLaSolicitud() {
+        when(returnRequestRepository.findById(404L)).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> service.registrarRecepcion(404L));
         verify(returnRequestRepository, never()).save(any());
     }
 
     @Test
-    void debeLanzarExcepcionCuandoSolicitudNoExiste() {
-        when(returnRequestRepository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> returnRequestService.registrarRecepcion(999L)
-        );
-
+    void registrarRecepcion_fallaSiElEstadoNoEsAprobado() {
+        ReturnRequest request = new ReturnRequest();
+        request.setStatus(Status.RECHAZADO);
+        when(returnRequestRepository.findById(5L)).thenReturn(Optional.of(request));
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> service.registrarRecepcion(5L)).getMessage().contains("estado APROBADO"));
         verify(returnRequestRepository, never()).save(any());
     }
 
-
     @Test
-    void decidirDevolucion_cuandoEstaPendiente_debeAprobarYGuardarHistorial() {
-
-        // 1. Preparar una devolución pendiente
-        Long id = 1L;
-
-        ReturnRequest devolucion = new ReturnRequest();
-        devolucion.setStatus(Status.PENDIENTE);
-
-        // 2. Simular la búsqueda en el repositorio
-        when(returnRequestRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(devolucion));
-
-        // 3. Ejecutar el método que queremos probar
-        returnRequestService.decidirDevolucion(
-                id,
-                Status.APROBADO,
-                "admin"
-        );
-
-        // 4. Comprobar que el estado cambió
-        assertEquals(Status.APROBADO, devolucion.getStatus());
-
-        // 5. Verificar que se guardó la devolución
-        verify(returnRequestRepository).save(devolucion);
-
-        // 6. Verificar el historial
-        ArgumentCaptor<ReturnStatusHistory> captor =
-                ArgumentCaptor.forClass(ReturnStatusHistory.class);
-
+    void decidirDevolucion_apruebaYGuardaHistorial() {
+        ReturnRequest request = new ReturnRequest();
+        request.setStatus(Status.PENDIENTE);
+        when(returnRequestRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(request));
+        service.decidirDevolucion(1L, Status.APROBADO, "admin");
+        assertEquals(Status.APROBADO, request.getStatus());
+        verify(returnRequestRepository).save(request);
+        ArgumentCaptor<ReturnStatusHistory> captor = ArgumentCaptor.forClass(ReturnStatusHistory.class);
         verify(returnStatusHistoryRepository).save(captor.capture());
-
-        ReturnStatusHistory historial = captor.getValue();
-
-        assertEquals(Status.PENDIENTE, historial.getPreviousStatus());
-        assertEquals(Status.APROBADO, historial.getNewStatus());
-        assertEquals("admin", historial.getChangedBy());
-        assertSame(devolucion, historial.getReturnRequest());
+        ReturnStatusHistory history = captor.getValue();
+        assertEquals(Status.PENDIENTE, history.getPreviousStatus());
+        assertEquals(Status.APROBADO, history.getNewStatus());
+        assertEquals("admin", history.getChangedBy());
+        assertSame(request, history.getReturnRequest());
+        assertNotNull(history.getChangedAt());
+        assertNull(history.getId());
     }
 
-
     @Test
-    void decidirDevolucion_cuandoEstaPendiente_debeRechazarYGuardarHistorial() {
-
-        // 1. Preparar una devolución pendiente
-        Long id = 2L;
-
-        ReturnRequest devolucion = new ReturnRequest();
-        devolucion.setStatus(Status.PENDIENTE);
-
-        // 2. Simular la búsqueda de la devolución
-        when(returnRequestRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(devolucion));
-
-        // 3. Ejecutar la decisión de rechazo
-        returnRequestService.decidirDevolucion(
-                id,
-                Status.RECHAZADO,
-                "admin"
-        );
-
-        // 4. Verificar el cambio de estado
-        assertEquals(Status.RECHAZADO, devolucion.getStatus());
-
-        // 5. Verificar que se guardó la devolución
-        verify(returnRequestRepository).save(devolucion);
-
-        // 6. Capturar y verificar el historial
-        ArgumentCaptor<ReturnStatusHistory> captor =
-                ArgumentCaptor.forClass(ReturnStatusHistory.class);
-
+    void decidirDevolucion_rechazaYGuardaHistorial() {
+        ReturnRequest request = new ReturnRequest();
+        request.setStatus(Status.PENDIENTE);
+        when(returnRequestRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(request));
+        service.decidirDevolucion(2L, Status.RECHAZADO, "admin");
+        assertEquals(Status.RECHAZADO, request.getStatus());
+        ArgumentCaptor<ReturnStatusHistory> captor = ArgumentCaptor.forClass(ReturnStatusHistory.class);
         verify(returnStatusHistoryRepository).save(captor.capture());
+        assertEquals(Status.RECHAZADO, captor.getValue().getNewStatus());
+    }
 
-        ReturnStatusHistory historial = captor.getValue();
+    @Test
+    void decidirDevolucion_rechazaDecisionNulaOPendiente() {
+        assertThrows(IllegalArgumentException.class, () -> service.decidirDevolucion(1L, null, "admin"));
+        assertThrows(IllegalArgumentException.class, () -> service.decidirDevolucion(1L, Status.PENDIENTE, "admin"));
+        verify(returnRequestRepository, never()).findByIdForUpdate(anyLong());
+    }
 
-        assertEquals(Status.PENDIENTE, historial.getPreviousStatus());
-        assertEquals(Status.RECHAZADO, historial.getNewStatus());
-        assertEquals("admin", historial.getChangedBy());
-        assertSame(devolucion, historial.getReturnRequest());
+    @Test
+    void decidirDevolucion_fallaSiNoEncuentraLaSolicitud() {
+        when(returnRequestRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
+        assertThrows(NoSuchElementException.class, () -> service.decidirDevolucion(404L, Status.APROBADO, "admin"));
+        verify(returnRequestRepository, never()).save(any());
+        verifyNoInteractions(returnStatusHistoryRepository);
+    }
+
+    @Test
+    void decidirDevolucion_fallaSiNoEstaPendiente() {
+        ReturnRequest request = new ReturnRequest();
+        request.setStatus(Status.RECIBIDO);
+        when(returnRequestRepository.findByIdForUpdate(6L)).thenReturn(Optional.of(request));
+        assertThrows(IllegalStateException.class, () -> service.decidirDevolucion(6L, Status.APROBADO, "admin"));
+        verify(returnRequestRepository, never()).save(any());
+        verifyNoInteractions(returnStatusHistoryRepository);
     }
 
 
     @Test
-    void decidirDevolucion_cuandoNoExiste_debeLanzarExcepcion() {
+    void crearSolicitud_conProductosDiferentesAsignaCadaNombreCorrectamente() {
+        ReturnRequest request = requestWithItems(1, 1);
+        request.getItems().get(1).setItemId(30);
+        when(orderGateway.findOrder(100L)).thenReturn(Optional.of(
+                new OrderInfo(100L, 1L, LocalDateTime.now().minusDays(2), List.of())));
+        when(returnBusinessRepository.pedidoValido(100L, 1L)).thenReturn(true);
+        when(returnRequestRepository.sumarCantidadSolicitada(eq(100L), anyInt(), anyCollection())).thenReturn(0L);
+        when(returnBusinessRepository.obtenerProductoDelPedido(100L, 25L))
+                .thenAnswer(invocation -> List.of("Teclado mecánico", 2));
+        when(returnBusinessRepository.obtenerProductoDelPedido(100L, 30L))
+                .thenAnswer(invocation -> List.of("Mouse inalámbrico", 3));
+        when(returnRequestRepository.save(any(ReturnRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        // 1. Preparar un ID inexistente
-        Long id = 999L;
+        service.crearSolicitud(request);
 
-        // 2. Simular que el repositorio no encuentra la devolución
-        when(returnRequestRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.empty());
-
-        // 3. Comprobar que el servicio lanza la excepción
-        NoSuchElementException exception = assertThrows(
-                NoSuchElementException.class,
-                () -> returnRequestService.decidirDevolucion(
-                        id,
-                        Status.APROBADO,
-                        "admin"
-                )
-        );
-
-        // 4. Verificar el mensaje
-        assertEquals(
-                "No se encontró la devolución con ID: 999",
-                exception.getMessage()
-        );
-
-        // 5. Comprobar que no se guardó ningún cambio
-        verify(returnRequestRepository, never()).save(any());
-        verify(returnStatusHistoryRepository, never()).save(any());
+        assertEquals("Teclado mecánico", request.getItems().get(0).getItemName());
+        assertEquals("Mouse inalámbrico", request.getItems().get(1).getItemName());
     }
-
-
-    @Test
-    void decidirDevolucion_cuandoYaEstaAprobada_debeLanzarConflicto() {
-
-        // 1. Preparar una devolución ya aprobada
-        Long id = 3L;
-
-        ReturnRequest devolucion = new ReturnRequest();
-        devolucion.setStatus(Status.APROBADO);
-
-        // 2. Simular la consulta
-        when(returnRequestRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(devolucion));
-
-        // 3. Intentar rechazar la devolución
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> returnRequestService.decidirDevolucion(
-                        id,
-                        Status.RECHAZADO,
-                        "admin"
-                )
-        );
-
-        // 4. Verificar el mensaje
-        assertTrue(exception.getMessage().contains(
-                "Solo se pueden decidir devoluciones PENDIENTES"
-        ));
-
-        // 5. Verificar que conserva su estado
-        assertEquals(Status.APROBADO, devolucion.getStatus());
-
-        // 6. Comprobar que no se guardaron cambios
-        verify(returnRequestRepository, never()).save(any());
-        verify(returnStatusHistoryRepository, never()).save(any());
-    }
-
-
-    @Test
-    void decidirDevolucion_cuandoYaEstaRechazada_debeLanzarConflicto() {
-
-        // 1. Preparar una devolución rechazada
-        Long id = 4L;
-
-        ReturnRequest devolucion = new ReturnRequest();
-        devolucion.setStatus(Status.RECHAZADO);
-
-        // 2. Simular la búsqueda
-        when(returnRequestRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(devolucion));
-
-        // 3. Intentar aprobar una devolución rechazada
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> returnRequestService.decidirDevolucion(
-                        id,
-                        Status.APROBADO,
-                        "admin"
-                )
-        );
-
-        // 4. Comprobar el mensaje de error
-        assertTrue(exception.getMessage().contains(
-                "Solo se pueden decidir devoluciones PENDIENTES"
-        ));
-
-        // 5. Verificar que conserva su estado
-        assertEquals(Status.RECHAZADO, devolucion.getStatus());
-
-        // 6. Verificar que no se guardaron cambios
-        verify(returnRequestRepository, never()).save(any());
-        verify(returnStatusHistoryRepository, never()).save(any());
-    }
-
-
-    @Test
-    void decidirDevolucion_cuandoDecisionEsInvalida_debeLanzarExcepcion() {
-
-        // 1. Preparar una decisión no permitida
-        Long id = 5L;
-
-        // 2. Intentar enviar RECIBIDO como decisión
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> returnRequestService.decidirDevolucion(
-                        id,
-                        Status.RECIBIDO,
-                        "admin"
-                )
-        );
-
-        // 3. Verificar el mensaje
-        assertEquals(
-                "La decisión debe ser APROBADO o RECHAZADO",
-                exception.getMessage()
-        );
-
-        // 4. No debe buscar ni modificar devoluciones
-        verify(returnRequestRepository, never()).findById(any());
-        verify(returnRequestRepository, never()).save(any());
-        verify(returnStatusHistoryRepository, never()).save(any());
-    }
-
-
 }
