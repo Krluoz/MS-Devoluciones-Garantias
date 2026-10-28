@@ -15,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -125,5 +126,48 @@ class ReturnRequestServiceTest {
         );
 
         verifyNoInteractions(returnRequestRepository);
+    }
+    @Test
+    void debeRegistrarRecepcionCuandoSolicitudEstaAprobada() {
+        ReturnRequest solicitud = new ReturnRequest();
+        solicitud.setId(1L);
+        solicitud.setStatus(Status.APROBADO);
+
+        when(returnRequestRepository.findById(1L)).thenReturn(Optional.of(solicitud));
+        when(returnRequestRepository.save(any(ReturnRequest.class))).thenAnswer(i -> i.getArgument(0));
+
+        ReturnRequest resultado = returnRequestService.registrarRecepcion(1L);
+
+        assertEquals(Status.RECIBIDO, resultado.getStatus());
+        verify(returnRequestRepository, times(1)).save(solicitud);
+    }
+
+    @Test
+    void debeLanzarExcepcionCuandoSolicitudEstaRechazada() {
+        ReturnRequest solicitud = new ReturnRequest();
+        solicitud.setId(3L);
+        solicitud.setStatus(Status.RECHAZADO);
+
+        when(returnRequestRepository.findById(3L)).thenReturn(Optional.of(solicitud));
+
+        IllegalArgumentException excepcion = assertThrows(
+                IllegalArgumentException.class,
+                () -> returnRequestService.registrarRecepcion(3L)
+        );
+
+        assertTrue(excepcion.getMessage().contains("La devolución debe estar en estado APROBADO"));
+        verify(returnRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void debeLanzarExcepcionCuandoSolicitudNoExiste() {
+        when(returnRequestRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> returnRequestService.registrarRecepcion(999L)
+        );
+
+        verify(returnRequestRepository, never()).save(any());
     }
 }

@@ -73,6 +73,10 @@ public class ReturnRequestController {
         return ResponseEntity.ok(solicitudes);
 
     }
-
+    @PatchMapping("/admin/{id}/received")
+    public ResponseEntity<ReturnRequest> registrarRecepcion(@PathVariable Long id) {
+        ReturnRequest actualizada = returnRequestService.registrarRecepcion(id);
+        return ResponseEntity.ok(actualizada);
+    }
 
 }
