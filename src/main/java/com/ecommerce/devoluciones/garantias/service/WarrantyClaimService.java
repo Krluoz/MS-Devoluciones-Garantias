@@ -15,6 +15,7 @@ import com.ecommerce.devoluciones.garantias.model.WarrantyStatus;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyClaimRepository;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyItemRepository;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyClaimStatusResponse;
+import com.ecommerce.devoluciones.garantias.dto.WarrantyDecisionRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -118,6 +119,42 @@ public class WarrantyClaimService {
                         "La reclamación de garantía " + claimId + " no existe."));
 
         return WarrantyClaimStatusResponse.from(claim);
+    }
+    @Transactional
+    public WarrantyClaimStatusResponse resolveClaim(Long claimId, WarrantyDecisionRequest request) {
+        // 1. Validar que la reclamación exista -> 404 si no existe
+        WarrantyClaim claim = claimRepository.findById(claimId)
+                .orElseThrow(() -> new WarrantyNotFoundException(
+                        "La reclamación de garantía " + claimId + " no existe."));
+
+        // 2. Validar que esté pendiente -> 422 si ya fue resuelta
+        if (claim.getStatus() != WarrantyStatus.PENDIENTE) {
+            throw new WarrantyRuleException(
+                    "La reclamación ya fue resuelta previamente y se encuentra en estado: " + claim.getStatus());
+        }
+
+        // 3. Validar que la decisión sea válida (APROBADO o RECHAZADO) -> 400 si es inválida
+        WarrantyStatus decision = (request != null) ? request.getEffectiveDecision() : null;
+        if (decision == null || decision == WarrantyStatus.PENDIENTE) {
+            throw new WarrantyBadRequestException(
+                    "La decisión debe ser APROBADO o RECHAZADO.");
+        }
+
+        // 4. Comprobar vigencia de la garantía si se intenta aprobar -> 422 si venció
+        if (decision == WarrantyStatus.APROBADO) {
+            boolean tieneProductosVencidos = claim.getItems().stream()
+                    .anyMatch(item -> LocalDateTime.now().isAfter(item.getWarrantyExpiresAt()));
+            if (tieneProductosVencidos) {
+                throw new WarrantyRuleException(
+                        "No se puede aprobar la garantía porque uno o más productos tienen su vigencia vencida.");
+            }
+        }
+
+        // 5. Actualizar estado y guardar en MySQL
+        claim.setStatus(decision);
+        WarrantyClaim actualizada = claimRepository.save(claim);
+
+        return WarrantyClaimStatusResponse.from(actualizada);
     }
 
     private void validateNoDuplicateProducts(WarrantyClaimRequest request) {
