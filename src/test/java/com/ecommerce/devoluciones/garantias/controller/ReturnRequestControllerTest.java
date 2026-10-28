@@ -3,6 +3,7 @@ package com.ecommerce.devoluciones.garantias.controller;
 import com.ecommerce.devoluciones.garantias.config.UserIdResolver;
 import com.ecommerce.devoluciones.garantias.dto.ReturnRequestCreateDto;
 import com.ecommerce.devoluciones.garantias.dto.ReturnItemRequestDto;
+import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
 import com.ecommerce.devoluciones.garantias.model.ReturnItem;
 import com.ecommerce.devoluciones.garantias.model.ReturnRequest;
 import com.ecommerce.devoluciones.garantias.model.Status;
@@ -15,6 +16,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
@@ -27,7 +31,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
 @WebMvcTest(ReturnRequestController.class)
 @Import(TestControllerConfig.class)
@@ -168,6 +176,94 @@ class ReturnRequestControllerTest {
                 .andExpect(jsonPath("$.items").isArray())
                 .andExpect(jsonPath("$.items").isEmpty());
     }
+
+    @Test
+    void obtenerMisDevoluciones_delegaUsuarioAutenticadoYDevuelve200()
+            throws Exception {
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                "usuario101",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+
+        ReturnSummaryDTO summary = new ReturnSummaryDTO(
+                1L,
+                10L,
+                Status.PENDIENTE,
+                LocalDateTime.now().minusDays(1),
+                LocalDateTime.now()
+        );
+
+        when(userIdResolver.obtenerUserId(any(Authentication.class)))
+                .thenReturn(101L);
+
+        when(returnRequestService.obtenerSolicitudesPorUsuario(eq(101L), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                        List.of(summary)
+                ));
+
+        mockMvc.perform(
+                        get("/api/returns/me")
+                                .principal(auth)
+                                .with(authentication(auth))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(1))
+                .andExpect(jsonPath("$.content[0].orderId").value(10))
+                .andExpect(jsonPath("$.content[0].status").value("PENDIENTE"));
+
+        verify(userIdResolver).obtenerUserId(any(Authentication.class));
+
+        verify(returnRequestService)
+                .obtenerSolicitudesPorUsuario(eq(101L), any());
+    }
+
+    @Test
+    void obtenerMisDevoluciones_devuelvePaginaVacia() throws Exception {
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                "usuario101",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+
+        when(userIdResolver.obtenerUserId(any(Authentication.class)))
+                .thenReturn(101L);
+
+        when(returnRequestService.obtenerSolicitudesPorUsuario(eq(101L), any()))
+                .thenReturn(Page.empty(PageRequest.of(0, 10)));
+
+        mockMvc.perform(
+                        get("/api/returns/me")
+                                .principal(auth)
+                                .with(authentication(auth))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+
+        verify(userIdResolver).obtenerUserId(any(Authentication.class));
+
+        verify(returnRequestService)
+                .obtenerSolicitudesPorUsuario(eq(101L), any());
+    }
+
+    @Test
+    void registrarRecepcion_devuelveDevolucionActualizada() throws Exception {
+        ReturnRequest recibida = new ReturnRequest();
+        recibida.setId(1L);
+        recibida.setOrderId(10L);
+        recibida.setUserId(101L);
+        recibida.setStatus(Status.RECIBIDO);
+        recibida.setItems(List.of());
+        when(returnRequestService.registrarRecepcion(1L)).thenReturn(recibida);
+
+        mockMvc.perform(patch("/api/returns/admin/1/received"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.status").value("RECIBIDO"));
+    }
+
 }
 
 

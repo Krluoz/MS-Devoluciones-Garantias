@@ -52,6 +52,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("error", mensaje));
+    }
 
     // Devolución no encontrada - HTTP 404
     @ExceptionHandler(NoSuchElementException.class)
