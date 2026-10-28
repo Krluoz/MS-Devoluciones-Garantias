@@ -20,8 +20,8 @@ public class SecurityConfig {
                         // Solo los administradores pueden  aprobar o rechazar devoluciones
                         .requestMatchers("/api/admin/returns/**").hasRole("ADMIN")
                         // Los usuarios autenticados pueden consultar sus propias devoluciones
-                        .requestMatchers(HttpMethod.GET, "/api/v1/returns/me").hasAnyRole("USER")
-                        .requestMatchers("/api/v1/returns/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/returns/me").hasAnyRole("USER")
+                        .requestMatchers("/api/returns/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .httpBasic(Customizer.withDefaults());

@@ -2,6 +2,7 @@
 package com.ecommerce.devoluciones.garantias.service;
 
 import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
+import com.ecommerce.devoluciones.garantias.gateway.OrderGateway;
 import com.ecommerce.devoluciones.garantias.model.ReturnRequest;
 import com.ecommerce.devoluciones.garantias.model.Status;
 import com.ecommerce.devoluciones.garantias.repository.ReturnBusinessRepository;
@@ -29,6 +30,7 @@ class ReturnRequestServiceTest {
 
     private ReturnRequestRepository returnRequestRepository;
     private ReturnRequestService returnRequestService;
+    private OrderGateway orderGateway;
     private ReturnStatusHistoryRepository returnStatusHistoryRepository;
 
     @BeforeEach
@@ -40,12 +42,14 @@ class ReturnRequestServiceTest {
         ReturnBusinessRepository returnBusinessRepository =
                 mock(ReturnBusinessRepository.class);
 
+        orderGateway = mock(OrderGateway.class);
         returnStatusHistoryRepository =
                 mock(ReturnStatusHistoryRepository.class);
 
         returnRequestService = new ReturnRequestService(
                 returnRequestRepository,
                 returnBusinessRepository,
+                orderGateway
                 returnStatusHistoryRepository
         );
     }

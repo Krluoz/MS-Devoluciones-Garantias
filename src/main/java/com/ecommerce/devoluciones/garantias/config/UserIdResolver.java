@@ -1,4 +1,3 @@
-
 package com.ecommerce.devoluciones.garantias.config;
 
 import org.springframework.security.core.Authentication;
