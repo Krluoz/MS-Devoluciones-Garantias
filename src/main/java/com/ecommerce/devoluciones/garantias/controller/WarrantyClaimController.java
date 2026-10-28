@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
+import com.ecommerce.devoluciones.garantias.dto.WarrantyDecisionRequest;
 
 @RestController
 @RequestMapping("/api/warranties/claims")
@@ -37,5 +39,13 @@ public class WarrantyClaimController {
             @PathVariable("id") Long id) {
 
         return ResponseEntity.ok(claimService.getClaimStatus(id));
+    }
+    @PatchMapping({"/admin/{id}/decision", "/{id}/decision"})
+    public ResponseEntity<WarrantyClaimStatusResponse> resolveClaim(
+            @PathVariable("id") Long id,
+            @RequestBody WarrantyDecisionRequest request) {
+
+        WarrantyClaimStatusResponse response = claimService.resolveClaim(id, request);
+        return ResponseEntity.ok(response);
     }
 }
