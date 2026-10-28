@@ -20,10 +20,16 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.ecommerce.devoluciones.garantias.repository.ReturnStatusHistoryRepository;
+import com.ecommerce.devoluciones.garantias.model.ReturnStatusHistory;
+import org.mockito.ArgumentCaptor;
+import java.util.NoSuchElementException;
+
 class ReturnRequestServiceTest {
 
     private ReturnRequestRepository returnRequestRepository;
     private ReturnRequestService returnRequestService;
+    private ReturnStatusHistoryRepository returnStatusHistoryRepository;
 
     @BeforeEach
     void setUp() {
@@ -34,9 +40,13 @@ class ReturnRequestServiceTest {
         ReturnBusinessRepository returnBusinessRepository =
                 mock(ReturnBusinessRepository.class);
 
+        returnStatusHistoryRepository =
+                mock(ReturnStatusHistoryRepository.class);
+
         returnRequestService = new ReturnRequestService(
                 returnRequestRepository,
-                returnBusinessRepository
+                returnBusinessRepository,
+                returnStatusHistoryRepository
         );
     }
 
@@ -170,4 +180,223 @@ class ReturnRequestServiceTest {
 
         verify(returnRequestRepository, never()).save(any());
     }
+
+
+    @Test
+    void decidirDevolucion_cuandoEstaPendiente_debeAprobarYGuardarHistorial() {
+
+        // 1. Preparar una devolución pendiente
+        Long id = 1L;
+
+        ReturnRequest devolucion = new ReturnRequest();
+        devolucion.setStatus(Status.PENDIENTE);
+
+        // 2. Simular la búsqueda en el repositorio
+        when(returnRequestRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(devolucion));
+
+        // 3. Ejecutar el método que queremos probar
+        returnRequestService.decidirDevolucion(
+                id,
+                Status.APROBADO,
+                "admin"
+        );
+
+        // 4. Comprobar que el estado cambió
+        assertEquals(Status.APROBADO, devolucion.getStatus());
+
+        // 5. Verificar que se guardó la devolución
+        verify(returnRequestRepository).save(devolucion);
+
+        // 6. Verificar el historial
+        ArgumentCaptor<ReturnStatusHistory> captor =
+                ArgumentCaptor.forClass(ReturnStatusHistory.class);
+
+        verify(returnStatusHistoryRepository).save(captor.capture());
+
+        ReturnStatusHistory historial = captor.getValue();
+
+        assertEquals(Status.PENDIENTE, historial.getPreviousStatus());
+        assertEquals(Status.APROBADO, historial.getNewStatus());
+        assertEquals("admin", historial.getChangedBy());
+        assertSame(devolucion, historial.getReturnRequest());
+    }
+
+
+    @Test
+    void decidirDevolucion_cuandoEstaPendiente_debeRechazarYGuardarHistorial() {
+
+        // 1. Preparar una devolución pendiente
+        Long id = 2L;
+
+        ReturnRequest devolucion = new ReturnRequest();
+        devolucion.setStatus(Status.PENDIENTE);
+
+        // 2. Simular la búsqueda de la devolución
+        when(returnRequestRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(devolucion));
+
+        // 3. Ejecutar la decisión de rechazo
+        returnRequestService.decidirDevolucion(
+                id,
+                Status.RECHAZADO,
+                "admin"
+        );
+
+        // 4. Verificar el cambio de estado
+        assertEquals(Status.RECHAZADO, devolucion.getStatus());
+
+        // 5. Verificar que se guardó la devolución
+        verify(returnRequestRepository).save(devolucion);
+
+        // 6. Capturar y verificar el historial
+        ArgumentCaptor<ReturnStatusHistory> captor =
+                ArgumentCaptor.forClass(ReturnStatusHistory.class);
+
+        verify(returnStatusHistoryRepository).save(captor.capture());
+
+        ReturnStatusHistory historial = captor.getValue();
+
+        assertEquals(Status.PENDIENTE, historial.getPreviousStatus());
+        assertEquals(Status.RECHAZADO, historial.getNewStatus());
+        assertEquals("admin", historial.getChangedBy());
+        assertSame(devolucion, historial.getReturnRequest());
+    }
+
+
+    @Test
+    void decidirDevolucion_cuandoNoExiste_debeLanzarExcepcion() {
+
+        // 1. Preparar un ID inexistente
+        Long id = 999L;
+
+        // 2. Simular que el repositorio no encuentra la devolución
+        when(returnRequestRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.empty());
+
+        // 3. Comprobar que el servicio lanza la excepción
+        NoSuchElementException exception = assertThrows(
+                NoSuchElementException.class,
+                () -> returnRequestService.decidirDevolucion(
+                        id,
+                        Status.APROBADO,
+                        "admin"
+                )
+        );
+
+        // 4. Verificar el mensaje
+        assertEquals(
+                "No se encontró la devolución con ID: 999",
+                exception.getMessage()
+        );
+
+        // 5. Comprobar que no se guardó ningún cambio
+        verify(returnRequestRepository, never()).save(any());
+        verify(returnStatusHistoryRepository, never()).save(any());
+    }
+
+
+    @Test
+    void decidirDevolucion_cuandoYaEstaAprobada_debeLanzarConflicto() {
+
+        // 1. Preparar una devolución ya aprobada
+        Long id = 3L;
+
+        ReturnRequest devolucion = new ReturnRequest();
+        devolucion.setStatus(Status.APROBADO);
+
+        // 2. Simular la consulta
+        when(returnRequestRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(devolucion));
+
+        // 3. Intentar rechazar la devolución
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> returnRequestService.decidirDevolucion(
+                        id,
+                        Status.RECHAZADO,
+                        "admin"
+                )
+        );
+
+        // 4. Verificar el mensaje
+        assertTrue(exception.getMessage().contains(
+                "Solo se pueden decidir devoluciones PENDIENTES"
+        ));
+
+        // 5. Verificar que conserva su estado
+        assertEquals(Status.APROBADO, devolucion.getStatus());
+
+        // 6. Comprobar que no se guardaron cambios
+        verify(returnRequestRepository, never()).save(any());
+        verify(returnStatusHistoryRepository, never()).save(any());
+    }
+
+
+    @Test
+    void decidirDevolucion_cuandoYaEstaRechazada_debeLanzarConflicto() {
+
+        // 1. Preparar una devolución rechazada
+        Long id = 4L;
+
+        ReturnRequest devolucion = new ReturnRequest();
+        devolucion.setStatus(Status.RECHAZADO);
+
+        // 2. Simular la búsqueda
+        when(returnRequestRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(devolucion));
+
+        // 3. Intentar aprobar una devolución rechazada
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> returnRequestService.decidirDevolucion(
+                        id,
+                        Status.APROBADO,
+                        "admin"
+                )
+        );
+
+        // 4. Comprobar el mensaje de error
+        assertTrue(exception.getMessage().contains(
+                "Solo se pueden decidir devoluciones PENDIENTES"
+        ));
+
+        // 5. Verificar que conserva su estado
+        assertEquals(Status.RECHAZADO, devolucion.getStatus());
+
+        // 6. Verificar que no se guardaron cambios
+        verify(returnRequestRepository, never()).save(any());
+        verify(returnStatusHistoryRepository, never()).save(any());
+    }
+
+
+    @Test
+    void decidirDevolucion_cuandoDecisionEsInvalida_debeLanzarExcepcion() {
+
+        // 1. Preparar una decisión no permitida
+        Long id = 5L;
+
+        // 2. Intentar enviar RECIBIDO como decisión
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> returnRequestService.decidirDevolucion(
+                        id,
+                        Status.RECIBIDO,
+                        "admin"
+                )
+        );
+
+        // 3. Verificar el mensaje
+        assertEquals(
+                "La decisión debe ser APROBADO o RECHAZADO",
+                exception.getMessage()
+        );
+
+        // 4. No debe buscar ni modificar devoluciones
+        verify(returnRequestRepository, never()).findById(any());
+        verify(returnRequestRepository, never()).save(any());
+        verify(returnStatusHistoryRepository, never()).save(any());
+    }
+
+
 }
