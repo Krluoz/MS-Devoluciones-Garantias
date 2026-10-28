@@ -12,15 +12,21 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
+import java.util.NoSuchElementException;
+import com.ecommerce.devoluciones.garantias.model.ReturnStatusHistory;
+import com.ecommerce.devoluciones.garantias.repository.ReturnStatusHistoryRepository;
 
 @Service
 public class ReturnRequestService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnBusinessRepository returnBusinessRepository;
+    private final ReturnStatusHistoryRepository returnStatusHistoryRepository;
 
-    public ReturnRequestService(ReturnRequestRepository returnRequestRepository, ReturnBusinessRepository returnBusinessRepository) {
+    public ReturnRequestService(ReturnRequestRepository returnRequestRepository, ReturnBusinessRepository returnBusinessRepository,
+                                ReturnStatusHistoryRepository returnStatusHistoryRepository) {
         this.returnRequestRepository = returnRequestRepository;
         this.returnBusinessRepository = returnBusinessRepository;
+        this.returnStatusHistoryRepository = returnStatusHistoryRepository;
     }
 
     // Creamos una solicitud de devolución
@@ -116,6 +122,53 @@ public class ReturnRequestService {
         return returnRequestRepository.save(request);
 
     }
+
+    @Transactional
+    public void decidirDevolucion(
+            Long id,
+            Status decision,
+            String administrador) {
+
+        // 1. Validar la decisión
+        if (decision != Status.APROBADO &&
+                decision != Status.RECHAZADO) {
+
+            throw new IllegalArgumentException(
+                    "La decisión debe ser APROBADO o RECHAZADO");
+        }
+
+        // 2. Buscar la devolución
+        ReturnRequest request = returnRequestRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "No se encontró la devolución con ID: " + id));
+
+        // 3. Validar que esté pendiente
+        if (request.getStatus() != Status.PENDIENTE) {
+            throw new IllegalStateException(
+                    "Solo se pueden decidir devoluciones PENDIENTES. " +
+                            "Estado actual: " + request.getStatus());
+        }
+
+        // 4. Obtener el estado anterior
+        Status estadoAnterior = request.getStatus();
+
+        // 5. Actualizar la devolución
+        request.setStatus(decision);
+
+        returnRequestRepository.save(request);
+
+        // 6. Crear el registro del historial
+        ReturnStatusHistory historial = new ReturnStatusHistory(
+                request,
+                estadoAnterior,
+                decision,
+                administrador
+        );
+
+        // 7. Guardar el historial
+        returnStatusHistoryRepository.save(historial);
+    }
+
 
 
 
