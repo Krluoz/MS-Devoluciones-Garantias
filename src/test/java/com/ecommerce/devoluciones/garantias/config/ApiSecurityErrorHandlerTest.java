@@ -1,3 +1,7 @@
+
+package com.ecommerce.devoluciones.garantias.config;
+
+import com.ecommerce.devoluciones.garantias.exception.WarrantyErrorCode;
 package com.ecommerce.devoluciones.garantias.config;
 
 import com.ecommerce.devoluciones.garantias.exception.WarrantyErrorCode;
@@ -9,96 +13,99 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.authentication.BadCredentialsException;
 
-import java.io.IOException;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApiSecurityErrorHandlerTest {
 
-    private ApiSecurityErrorHandler handler;
-    private MockHttpServletRequest request;
-    private MockHttpServletResponse response;
-
-    @BeforeEach
-    void setUp() {
-        handler = new ApiSecurityErrorHandler();
-        request = new MockHttpServletRequest();
-        request.setRequestURI("/api/v1/warranties/claims/99");
-        response = new MockHttpServletResponse();
-    }
+    private final ApiSecurityErrorHandler handler =
+            new ApiSecurityErrorHandler();
 
     @Test
-    void commence_devuelve401YFormatoJson() throws IOException {
-        AuthenticationException exception =
-                mock(AuthenticationException.class);
+    void commence_debeResponder401ConFormatoComunDeError() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/garantias");
 
-        handler.commence(request, response, exception);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.commence(
+                request,
+                response,
+                new BadCredentialsException("Credenciales inválidas")
+        );
+
+        String body = response.getContentAsString();
 
         assertEquals(HttpStatus.UNAUTHORIZED.value(), response.getStatus());
+        assertEquals(
+                "Basic realm=\"warranties\"",
+                response.getHeader("WWW-Authenticate")
+        );
         assertTrue(response.getContentType().startsWith("application/json"));
         assertEquals("UTF-8", response.getCharacterEncoding());
-        assertEquals("Basic realm=\"warranties\"",
-                response.getHeader("WWW-Authenticate"));
 
-        String json = response.getContentAsString();
-
-        assertTrue(json.contains("\"status\":401"));
-        assertTrue(json.contains("\"code\":\""
-                + WarrantyErrorCode.UNAUTHORIZED.name() + "\""));
-        assertTrue(json.contains("\"message\":\"Se requiere autenticación válida.\""));
-        assertTrue(json.contains("\"path\":\"/api/v1/warranties/claims/99\""));
+        assertTrue(body.contains("\"status\":401"));
+        assertTrue(body.contains(
+                "\"code\":\"" + WarrantyErrorCode.UNAUTHORIZED.name() + "\""
+        ));
+        assertTrue(body.contains(
+                "\"message\":\"Se requiere autenticación válida.\""
+        ));
+        assertTrue(body.contains("\"path\":\"/api/garantias\""));
     }
 
     @Test
-    void handle_devuelve403YFormatoJson() throws IOException {
-        AccessDeniedException exception =
-                new AccessDeniedException("Acceso denegado");
+    void handle_debeResponder403ConFormatoComunDeError() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/garantias/123");
 
-        handler.handle(request, response, exception);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.handle(
+                request,
+                response,
+                new AccessDeniedException("Acceso denegado")
+        );
+
+        String body = response.getContentAsString();
 
         assertEquals(HttpStatus.FORBIDDEN.value(), response.getStatus());
         assertTrue(response.getContentType().startsWith("application/json"));
         assertEquals("UTF-8", response.getCharacterEncoding());
 
-        String json = response.getContentAsString();
-
-        assertTrue(json.contains("\"status\":403"));
-        assertTrue(json.contains("\"code\":\""
-                + WarrantyErrorCode.FORBIDDEN.name() + "\""));
-        assertTrue(json.contains(
-                "\"message\":\"No tienes permisos para realizar esta acción.\""));
-        assertTrue(json.contains("\"path\":\"/api/v1/warranties/claims/99\""));
+        assertTrue(body.contains("\"status\":403"));
+        assertTrue(body.contains(
+                "\"code\":\"" + WarrantyErrorCode.FORBIDDEN.name() + "\""
+        ));
+        assertTrue(body.contains(
+                "\"message\":\"No tienes permisos para realizar esta acción.\""
+        ));
+        assertTrue(body.contains("\"path\":\"/api/garantias/123\""));
     }
 
     @Test
-    void commence_escapaComillasYBarrasInvertidasEnLaRuta() throws IOException {
-        request.setRequestURI("/api/test/\"recurso\\id");
+    void commence_debeEscaparComillasYBarrasInvertidasEnLaRuta()
+            throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/garantias/\"especial\\ruta");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
 
         handler.commence(
                 request,
                 response,
-                mock(AuthenticationException.class));
+                new BadCredentialsException("Credenciales inválidas")
+        );
 
-        String json = response.getContentAsString();
+        String body = response.getContentAsString();
 
-        assertTrue(json.contains("\"path\":\"/api/test/\\\"recurso\\\\id\""));
-    }
+        assertEquals(HttpStatus.UNAUTHORIZED.value(), response.getStatus());
 
-    @Test
-    void write_configuraRespuestaHttpCorrectamente() throws IOException {
-        handler.handle(
-                request,
-                response,
-                new AccessDeniedException("sin permisos"));
-
-        assertEquals(403, response.getStatus());
-        assertTrue(response.getContentType().startsWith("application/json"));
-        assertEquals("UTF-8", response.getCharacterEncoding());
-        assertNotNull(response.getContentAsString());
-        assertFalse(response.getContentAsString().isBlank());
+        // La comilla y la barra invertida deben aparecer escapadas en el JSON.
+        assertTrue(body.contains(
+                "\"path\":\"/api/garantias/\\\"especial\\\\ruta\""
+        ));
     }
 }
-

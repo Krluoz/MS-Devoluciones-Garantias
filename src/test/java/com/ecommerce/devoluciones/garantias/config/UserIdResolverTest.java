@@ -19,7 +19,9 @@ class UserIdResolverTest {
 
     @Test
     void authenticatedResolver_resuelveIdsConfigurados() {
-        AuthenticatedUserIdResolver resolver = new AuthenticatedUserIdResolver();
+        AuthenticatedUserIdResolver resolver =
+                new AuthenticatedUserIdResolver();
+
         assertEquals(101L, resolver.obtenerUserId(authentication("101", true)));
         assertEquals(102L, resolver.obtenerUserId(authentication("102", true)));
     }
@@ -37,8 +39,10 @@ class UserIdResolverTest {
     }
 
     @Test
-    void authenticatedResolver_rechazaUsuarioSinIdNumerico() {
-        AuthenticatedUserIdResolver resolver = new AuthenticatedUserIdResolver();
+    void authenticatedResolver_rechazaUsuarioSinIdAsociado() {
+        AuthenticatedUserIdResolver resolver =
+                new AuthenticatedUserIdResolver();
+
         assertThrows(
                 NumberFormatException.class,
                 () -> resolver.obtenerUserId(authentication("sin-mapeo", true))

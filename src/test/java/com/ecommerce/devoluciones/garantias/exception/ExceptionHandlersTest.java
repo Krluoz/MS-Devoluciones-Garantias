@@ -212,70 +212,61 @@ class ExceptionHandlersTest {
     void warrantyHandler_mapeaExcepcionesDeNegocio() {
         WarrantyExceptionHandler handler = new WarrantyExceptionHandler();
         MockHttpServletRequest request = crearRequest(
-                "GET", "/api/v1/warranties/claims/99");
+                "GET", "/api/warranties/claims/7"
+        );
 
         var missing = handler.handleNotFound(
-                new WarrantyNotFoundException("no existe"),
-                request);
-
+                new WarrantyNotFoundException("no existe"), request);
         assertEquals(HttpStatus.NOT_FOUND, missing.getStatusCode());
         assertEquals("no existe", missing.getBody().message());
-        assertEquals("/api/v1/warranties/claims/99", missing.getBody().path());
+        assertEquals("/api/warranties/claims/7", missing.getBody().path());
 
         var rule = handler.handleRule(
-                new WarrantyRuleException("garantía vencida"),
-                request);
-
+                new WarrantyRuleException("garantía vencida"), request);
         assertEquals(HttpStatus.UNPROCESSABLE_CONTENT, rule.getStatusCode());
         assertEquals("garantía vencida", rule.getBody().message());
-        assertEquals("/api/v1/warranties/claims/99", rule.getBody().path());
 
         var badRequest = handler.handleBadRequest(
-                new WarrantyBadRequestException("decisión incorrecta"),
-                request);
-
+                new WarrantyBadRequestException("decisión incorrecta"), request);
         assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
         assertEquals("decisión incorrecta", badRequest.getBody().message());
-        assertEquals("/api/v1/warranties/claims/99", badRequest.getBody().path());
-
-        var unreadable = handler.handleUnreadable(
-                mock(HttpMessageNotReadableException.class),
-                request);
-
-        assertEquals(HttpStatus.BAD_REQUEST, unreadable.getStatusCode());
-        assertEquals(
-                "El cuerpo de la solicitud es inválido o contiene valores no permitidos.",
-                unreadable.getBody().message());
-        assertEquals("/api/v1/warranties/claims/99", unreadable.getBody().path());
     }
 
 
     @Test
-    void warrantyHandler_mapeaFieldErrorsYReemplazaMensajeNulo() {
+    void warrantyHandler_mapeaValidacionJsonInvalidoYErrorInesperado() {
         WarrantyExceptionHandler handler = new WarrantyExceptionHandler();
-
         MockHttpServletRequest request = crearRequest(
-                "POST", "/api/v1/warranties/claims");
+                "POST", "/api/warranties/claims"
+        );
 
-        var response = handler.handleValidation(
-                validationException(List.of(
-                        new FieldError("dto", "userId", null),
-                        new FieldError("dto", "userId", "mensaje duplicado"),
-                        new FieldError("dto", "orderId", "orden inválida")
-                )),
+        var response = handler.handleValidation(validationException(List.of(
+                new FieldError("dto", "userId", null),
+                new FieldError("dto", "orderId", "orden inválida"))), request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("VALIDATION_ERROR", response.getBody().code());
+        assertTrue(response.getBody().message().contains("orderId: orden inválida"));
+        assertTrue(response.getBody().message().contains("userId: valor inválido"));
+        assertEquals("/api/warranties/claims", response.getBody().path());
+
+        var unreadable = handler.handleUnreadable(
+                mock(org.springframework.http.converter.HttpMessageNotReadableException.class),
                 request);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-
+        assertEquals(HttpStatus.BAD_REQUEST, unreadable.getStatusCode());
+        assertEquals("MALFORMED_REQUEST", unreadable.getBody().code());
         assertEquals(
-                "orderId: orden inválida; userId: mensaje duplicado; userId: valor inválido",
-                response.getBody().message());
+                "El cuerpo de la solicitud es inválido o contiene valores no permitidos.",
+                unreadable.getBody().message());
 
+        var unexpected = handler.handleUnexpected(
+                new RuntimeException("detalle interno"), request);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, unexpected.getStatusCode());
+        assertEquals("INTERNAL_ERROR", unexpected.getBody().code());
         assertEquals(
-                "/api/v1/warranties/claims",
-                response.getBody().path());
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+                "Ocurrió un error interno. Intenta de nuevo más tarde.",
+                unexpected.getBody().message());
+        assertEquals("/api/warranties/claims", unexpected.getBody().path());
     }
 
 

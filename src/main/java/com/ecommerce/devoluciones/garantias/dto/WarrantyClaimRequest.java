@@ -9,10 +9,6 @@ import java.util.List;
 
 public record WarrantyClaimRequest(
 
-        @NotNull(message = "El id del usuario es obligatorio")
-        @Positive(message = "El id del usuario debe ser positivo")
-        Long userId,
-
         @NotNull(message = "El id de la orden es obligatorio")
         @Positive(message = "El id de la orden debe ser positivo")
         Long orderId,

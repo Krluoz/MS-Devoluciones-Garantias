@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
 
 @RestController
-@RequestMapping("/api/admin/returns")
+@RequestMapping("/api/v1/admin/returns")
 public class ReturnAdminController {
 
     private final ReturnRequestService returnRequestService;

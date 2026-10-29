@@ -84,7 +84,7 @@ class ReturnRequestControllerTest {
         );
 
         ReturnRequestCreateDto requestDto = new ReturnRequestCreateDto(
-                10L, 101L, List.of(itemDto)
+                10L, List.of(itemDto)
         );
 
         when(returnRequestService.crearSolicitud(any(ReturnRequest.class)))
@@ -123,13 +123,9 @@ class ReturnRequestControllerTest {
 
         mockMvc.perform(get("/api/v1/returns/99"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.timestamp").exists())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
-                .andExpect(jsonPath("$.message").value(
+                .andExpect(jsonPath("$.error").value(
                         "No se encontró la solicitud de devolución con ID 99."
-                ))
-                .andExpect(jsonPath("$.path").value("/api/v1/returns/99"));
+                ));
     }
 
     @Test

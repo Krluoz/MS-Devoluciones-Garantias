@@ -40,12 +40,13 @@ public class ReturnRequestController {
     //mapeo de endpoint para crear una solicitud
     @PostMapping
     public ResponseEntity<ReturnRequestResponseDto> crearSolicitud(
-            @Valid @RequestBody ReturnRequestCreateDto requestDto) {
+            @Valid @RequestBody ReturnRequestCreateDto requestDto,
+            Authentication authentication) {
 
         ReturnRequest request = new ReturnRequest();
 
         request.setOrderId(requestDto.orderId());
-        request.setUserId(requestDto.userId());
+        request.setUserId(userIdResolver.obtenerUserId(authentication));
         request.setItems(requestDto.items().stream().map(
                 itemDto-> {
                     ReturnItem item = new ReturnItem();
@@ -141,9 +142,9 @@ public class ReturnRequestController {
 
     }
     @PatchMapping("/admin/{id}/received")
-    public ResponseEntity<ReturnRequest> registrarRecepcion(@PathVariable Long id) {
+    public ResponseEntity<ReturnRequestResponseDto> registrarRecepcion(@PathVariable Long id) {
         ReturnRequest actualizada = returnRequestService.registrarRecepcion(id);
-        return ResponseEntity.ok(actualizada);
+        return ResponseEntity.ok(convertirAResponseDto(actualizada));
     }
 
 }

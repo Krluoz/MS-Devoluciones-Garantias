@@ -15,6 +15,7 @@ import com.ecommerce.devoluciones.garantias.model.WarrantyReason;
 import com.ecommerce.devoluciones.garantias.model.WarrantyStatus;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyClaimRepository;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyItemRepository;
+import com.ecommerce.devoluciones.garantias.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,7 +66,7 @@ class WarrantyClaimCreateServiceTest {
 
     // Request del usuario 1 sobre la orden 100 con un solo producto
     private WarrantyClaimRequest requestFor(Long itemId, int quantity) {
-        return new WarrantyClaimRequest(1L, 100L, List.of(
+        return new WarrantyClaimRequest(100L, List.of(
                 new WarrantyItemRequest(itemId, quantity, WarrantyReason.DEFECTUOSO, "No funciona")));
     }
 
@@ -81,7 +82,7 @@ class WarrantyClaimCreateServiceTest {
         when(claimRepository.save(any(WarrantyClaim.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        WarrantyClaimResponse response = service.createClaim(requestFor(25L, 2));
+        WarrantyClaimResponse response = service.createClaim(1L, requestFor(25L, 2));
 
         assertThat(response.status()).isEqualTo(WarrantyStatus.PENDIENTE);
         assertThat(response.userId()).isEqualTo(1L);
@@ -104,7 +105,7 @@ class WarrantyClaimCreateServiceTest {
         when(claimRepository.save(any(WarrantyClaim.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        WarrantyClaimResponse response = service.createClaim(requestFor(25L, 1));
+        WarrantyClaimResponse response = service.createClaim(1L, requestFor(25L, 1));
 
         assertThat(response.items().get(0).quantity()).isEqualTo(1);
         verify(claimRepository).save(any(WarrantyClaim.class));
@@ -116,16 +117,15 @@ class WarrantyClaimCreateServiceTest {
 
     @Test
     void createClaim_duplicateProductInList_throwsBadRequest() {
-        WarrantyClaimRequest request = new WarrantyClaimRequest(1L, 100L, List.of(
+        WarrantyClaimRequest request = new WarrantyClaimRequest(100L, List.of(
                 new WarrantyItemRequest(25L, 1, WarrantyReason.DEFECTUOSO, "Falla"),
                 new WarrantyItemRequest(25L, 1, WarrantyReason.FALLA_FUNCIONAL, "Otra falla")
         ));
 
-        assertThatThrownBy(() -> service.createClaim(request))
+        assertThatThrownBy(() -> service.createClaim(1L, request))
                 .isInstanceOf(WarrantyBadRequestException.class)
                 .hasMessageContaining("repetido");
 
-        // Falla antes de consultar a otros servicios o guardar algo
         verifyNoInteractions(orderGateway);
         verify(claimRepository, never()).save(any());
     }
@@ -134,7 +134,7 @@ class WarrantyClaimCreateServiceTest {
     void createClaim_userDoesNotExist_throwsNotFound() {
         when(orderGateway.userExists(1L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.createClaim(requestFor(25L, 1)))
+        assertThatThrownBy(() -> service.createClaim(1L, requestFor(25L, 1)))
                 .isInstanceOf(WarrantyNotFoundException.class)
                 .hasMessageContaining("usuario");
 
@@ -146,7 +146,7 @@ class WarrantyClaimCreateServiceTest {
         when(orderGateway.userExists(1L)).thenReturn(true);
         when(orderGateway.findOrder(100L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createClaim(requestFor(25L, 1)))
+        assertThatThrownBy(() -> service.createClaim(1L, requestFor(25L, 1)))
                 .isInstanceOf(WarrantyNotFoundException.class)
                 .hasMessageContaining("orden");
 
@@ -156,13 +156,13 @@ class WarrantyClaimCreateServiceTest {
     @Test
     void createClaim_orderNotFromUser_throwsNotFound() {
         // El usuario 2 pide garantía de la orden 100, que es del usuario 1
-        WarrantyClaimRequest request = new WarrantyClaimRequest(2L, 100L, List.of(
+        WarrantyClaimRequest request = new WarrantyClaimRequest(100L, List.of(
                 new WarrantyItemRequest(25L, 1, WarrantyReason.DEFECTUOSO, "Falla")
         ));
         when(orderGateway.userExists(2L)).thenReturn(true);
         when(orderGateway.findOrder(100L)).thenReturn(Optional.of(orderBoughtMonthsAgo(1)));
 
-        assertThatThrownBy(() -> service.createClaim(request))
+        assertThatThrownBy(() -> service.createClaim(2L, request))
                 .isInstanceOf(WarrantyNotFoundException.class)
                 .hasMessageContaining("orden");
 
@@ -175,7 +175,7 @@ class WarrantyClaimCreateServiceTest {
         // Comprada hace 5 meses, el plazo es de 3
         when(orderGateway.findOrder(100L)).thenReturn(Optional.of(orderBoughtMonthsAgo(5)));
 
-        assertThatThrownBy(() -> service.createClaim(requestFor(25L, 1)))
+        assertThatThrownBy(() -> service.createClaim(1L, requestFor(25L, 1)))
                 .isInstanceOf(WarrantyRuleException.class)
                 .hasMessageContaining("venció");
 
@@ -188,7 +188,7 @@ class WarrantyClaimCreateServiceTest {
         when(orderGateway.findOrder(100L)).thenReturn(Optional.of(orderBoughtMonthsAgo(1)));
 
         // El producto 40 no está en la orden 100
-        assertThatThrownBy(() -> service.createClaim(requestFor(40L, 1)))
+        assertThatThrownBy(() -> service.createClaim(1L, requestFor(40L, 1)))
                 .isInstanceOf(WarrantyNotFoundException.class)
                 .hasMessageContaining("40");
 
@@ -202,7 +202,7 @@ class WarrantyClaimCreateServiceTest {
         // Compró 2 y no hay reclamos previos; pide 3
         when(itemRepository.sumClaimedQuantity(eq(100L), eq(25L), anyCollection())).thenReturn(0L);
 
-        assertThatThrownBy(() -> service.createClaim(requestFor(25L, 3)))
+        assertThatThrownBy(() -> service.createClaim(1L, requestFor(25L, 3)))
                 .isInstanceOf(WarrantyRuleException.class);
 
         verify(claimRepository, never()).save(any());
@@ -215,7 +215,7 @@ class WarrantyClaimCreateServiceTest {
         // Compró 2, ya hay 1 en otro reclamo -> solo queda 1; pide 2
         when(itemRepository.sumClaimedQuantity(eq(100L), eq(25L), anyCollection())).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.createClaim(requestFor(25L, 2)))
+        assertThatThrownBy(() -> service.createClaim(1L, requestFor(25L, 2)))
                 .isInstanceOf(WarrantyRuleException.class);
 
         verify(claimRepository, never()).save(any());
@@ -226,22 +226,45 @@ class WarrantyClaimCreateServiceTest {
     // =====================================================
 
     @Test
-    void getClaimStatus_existingClaim_returnsStatus() {
+    void getClaimStatus_ownClaim_returnsStatus() {
         WarrantyClaim claim = new WarrantyClaim(100L, 1L);
         claim.setId(1L);
         when(claimRepository.findById(1L)).thenReturn(Optional.of(claim));
 
-        WarrantyClaimStatusResponse response = service.getClaimStatus(1L);
+        WarrantyClaimStatusResponse response =
+                service.getClaimStatus(1L, new AuthenticatedUser(1L, false));
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(WarrantyStatus.PENDIENTE);
     }
 
     @Test
+    void getClaimStatus_claimOfAnotherUser_throwsNotFound() {
+        WarrantyClaim claim = new WarrantyClaim(100L, 1L); // es del usuario 1
+        claim.setId(1L);
+        when(claimRepository.findById(1L)).thenReturn(Optional.of(claim));
+
+        assertThatThrownBy(() -> service.getClaimStatus(1L, new AuthenticatedUser(2L, false)))
+                .isInstanceOf(WarrantyNotFoundException.class);
+    }
+
+    @Test
+    void getClaimStatus_adminCanSeeAnyClaim() {
+        WarrantyClaim claim = new WarrantyClaim(100L, 1L);
+        claim.setId(1L);
+        when(claimRepository.findById(1L)).thenReturn(Optional.of(claim));
+
+        WarrantyClaimStatusResponse response =
+                service.getClaimStatus(1L, new AuthenticatedUser(99L, true));
+
+        assertThat(response.id()).isEqualTo(1L);
+    }
+
+    @Test
     void getClaimStatus_claimDoesNotExist_throwsNotFound() {
         when(claimRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getClaimStatus(999L))
+        assertThatThrownBy(() -> service.getClaimStatus(999L, new AuthenticatedUser(1L, false)))
                 .isInstanceOf(WarrantyNotFoundException.class);
     }
 }
