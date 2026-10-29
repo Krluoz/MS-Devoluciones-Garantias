@@ -5,12 +5,13 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,45 +22,144 @@ class ExceptionHandlersTest {
     @Test
     void globalHandler_mapeaArgumentosInvalidosYConflictos() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
-        var badRequest = handler.manejarValidacion(new IllegalArgumentException("dato inválido"));
+
+        MockHttpServletRequest request = crearRequest(
+                "POST", "/api/returns"
+        );
+
+        var badRequest = handler.manejarValidacion(
+                new IllegalArgumentException("dato inválido"),
+                request);
+
         assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
-        assertEquals("dato inválido", badRequest.getBody().get("error"));
 
-        var missing = handler.manejarNoEncontrado(new java.util.NoSuchElementException("no existe"));
+        Map<?, ?> badRequestBody = (Map<?, ?>) badRequest.getBody();
+
+        assertEquals(400, badRequestBody.get("status"));
+        assertEquals("INVALID_REQUEST", badRequestBody.get("code"));
+        assertEquals("dato inválido", badRequestBody.get("message"));
+        assertEquals("/api/returns", badRequestBody.get("path"));
+        assertNotNull(badRequestBody.get("timestamp"));
+
+        request = crearRequest("GET", "/api/returns/99");
+
+        var missing = handler.manejarNoEncontrado(
+                new java.util.NoSuchElementException("no existe"),
+                request);
+
         assertEquals(HttpStatus.NOT_FOUND, missing.getStatusCode());
-        assertEquals("no existe", missing.getBody().get("error"));
 
-        var conflict = handler.manejarConflicto(new IllegalStateException("estado incompatible"));
+        Map<?, ?> missingBody = (Map<?, ?>) missing.getBody();
+
+        assertEquals(404, missingBody.get("status"));
+        assertEquals("RESOURCE_NOT_FOUND", missingBody.get("code"));
+        assertEquals("no existe", missingBody.get("message"));
+        assertEquals("/api/returns/99", missingBody.get("path"));
+
+        request = crearRequest("POST", "/api/returns");
+
+        var conflict = handler.manejarConflicto(
+                new IllegalStateException("estado incompatible"),
+                request);
+
         assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
-        assertEquals("estado incompatible", conflict.getBody().get("error"));
+
+        Map<?, ?> conflictBody = (Map<?, ?>) conflict.getBody();
+
+        assertEquals(409, conflictBody.get("status"));
+        assertEquals(
+                "BUSINESS_RULE_VIOLATION",
+                conflictBody.get("code")
+        );
+        assertEquals(
+                "estado incompatible",
+                conflictBody.get("message")
+        );
     }
 
     @Test
     void globalHandler_usaMensajeDeValidacionOFallback() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
-        MethodArgumentNotValidException exception = validationException(List.of(
-                new FieldError("dto", "orderId", "El pedido es obligatorio")));
-        var response = handler.manejarErroresDeValidacion(exception);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("El pedido es obligatorio", response.getBody().get("error"));
 
-        var fallback = handler.manejarErroresDeValidacion(validationException(List.of()));
-        assertEquals("Los datos enviados no son válidos.", fallback.getBody().get("error"));
+        MockHttpServletRequest request = crearRequest(
+                "POST", "/api/returns"
+        );
+
+        var response = handler.manejarErroresDeValidacion(
+                validationException(List.of(
+                        new FieldError(
+                                "dto",
+                                "orderId",
+                                "El pedido es obligatorio"
+                        )
+                )),
+                request
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+
+        Map<?, ?> responseBody = (Map<?, ?>) response.getBody();
+
+        assertEquals(
+                "El pedido es obligatorio",
+                responseBody.get("message")
+        );
+        assertEquals("VALIDATION_ERROR", responseBody.get("code"));
+
+        var fallback = handler.manejarErroresDeValidacion(
+                validationException(List.of()),
+                request
+        );
+
+        Map<?, ?> fallbackBody = (Map<?, ?>) fallback.getBody();
+
+        assertEquals(
+                "Los datos enviados no son válidos.",
+                fallbackBody.get("message")
+        );
     }
 
     @Test
     void globalHandler_mapeaViolacionesDeRestriccionConYSinMensaje() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        MockHttpServletRequest request = crearRequest(
+                "GET", "/api/returns/0"
+        );
+
         ConstraintViolation<?> violation = mock(ConstraintViolation.class);
         when(violation.getMessage()).thenReturn("debe ser positivo");
+
         var response = handler.manejarErrorParametroInvalido(
-                new ConstraintViolationException("inválido", Set.of(violation)));
+                new ConstraintViolationException(
+                        "inválido",
+                        Set.of(violation)
+                ),
+                request
+        );
+
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("debe ser positivo", response.getBody().get("error"));
+
+        Map<?, ?> responseBody = (Map<?, ?>) response.getBody();
+
+        assertEquals(400, responseBody.get("status"));
+        assertEquals("VALIDATION_ERROR", responseBody.get("code"));
+        assertEquals("debe ser positivo", responseBody.get("message"));
 
         var fallback = handler.manejarErrorParametroInvalido(
-                new ConstraintViolationException("inválido", Set.<ConstraintViolation<?>>of()));
-        assertEquals("El ID de la solicitud no es válido.", fallback.getBody().get("error"));
+                new ConstraintViolationException(
+                        "inválido",
+                        Set.<ConstraintViolation<?>>of()
+                ),
+                request
+        );
+
+        Map<?, ?> fallbackBody = (Map<?, ?>) fallback.getBody();
+
+        assertEquals(
+                "El ID de la solicitud no es válido.",
+                fallbackBody.get("message")
+        );
     }
 
     @Test
@@ -151,5 +251,17 @@ class ExceptionHandlersTest {
         MethodArgumentNotValidException exception = mock(MethodArgumentNotValidException.class);
         when(exception.getBindingResult()).thenReturn(result);
         return exception;
+    }
+
+    private MockHttpServletRequest crearRequest(
+            String metodo,
+            String ruta) {
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        request.setMethod(metodo);
+        request.setRequestURI(ruta);
+
+        return request;
     }
 }

@@ -1,5 +1,6 @@
 package com.ecommerce.devoluciones.garantias.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -7,25 +8,88 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private boolean esEndpointDeDevolucionPropio(
+            HttpServletRequest request) {
+
+        String metodo = request.getMethod();
+        String ruta = request.getRequestURI()
+                .substring(request.getContextPath().length());
+
+        // POST /api/returns
+        if ("POST".equals(metodo)
+                && "/api/returns".equals(ruta)) {
+            return true;
+        }
+
+        // GET /api/returns/{id}
+        return "GET".equals(metodo)
+                && ruta.matches("/api/returns/\\d+");
+    }
+
+    private ResponseEntity<Map<String, Object>> construirRespuestaError(
+            HttpStatus status,
+            String codigo,
+            String mensaje,
+            HttpServletRequest request) {
+
+        Map<String, Object> error = new LinkedHashMap<>();
+
+        error.put("timestamp", Instant.now().toString());
+        error.put("status", status.value());
+        error.put("code", codigo);
+        error.put("message", mensaje);
+        error.put("path", request.getRequestURI()
+                .substring(request.getContextPath().length()));
+
+        return ResponseEntity.status(status).body(error);
+    }
+
+    private ResponseEntity<?> responderError(
+            HttpStatus status,
+            String codigo,
+            String mensaje,
+            HttpServletRequest request) {
+
+        if (esEndpointDeDevolucionPropio(request)) {
+            return construirRespuestaError(
+                    status,
+                    codigo,
+                    mensaje,
+                    request
+            );
+        }
+
+        // Mantener el formato actual para los demás endpoints.
+        return ResponseEntity
+                .status(status)
+                .body(Map.of("error", mensaje));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> manejarValidacion(
-            IllegalArgumentException ex) {
+    public ResponseEntity<?> manejarValidacion(
+            IllegalArgumentException ex,
+            HttpServletRequest request) {
 
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", ex.getMessage()));
+        return responderError(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_REQUEST",
+                ex.getMessage(),
+                request
+        );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> manejarErroresDeValidacion(
-            MethodArgumentNotValidException ex) {
+    public ResponseEntity<?> manejarErroresDeValidacion(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
 
         String mensaje = ex.getBindingResult()
                 .getFieldErrors()
@@ -34,14 +98,18 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse("Los datos enviados no son válidos.");
 
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", mensaje));
+        return responderError(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                mensaje,
+                request
+        );
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<Map<String, String>> manejarErrorParametroInvalido(
-            ConstraintViolationException ex) {
+    public ResponseEntity<?> manejarErrorParametroInvalido(
+            ConstraintViolationException ex,
+            HttpServletRequest request) {
 
         String mensaje = ex.getConstraintViolations()
                 .stream()
@@ -49,29 +117,53 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse("El ID de la solicitud no es válido.");
 
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", mensaje));
+        return responderError(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                mensaje,
+                request
+        );
+    }
+
+    @ExceptionHandler(DuplicateReturnRequestException.class)
+    public ResponseEntity<?> manejarSolicitudDuplicada(
+            DuplicateReturnRequestException ex,
+            HttpServletRequest request) {
+
+        return responderError(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_RETURN_REQUEST",
+                ex.getMessage(),
+                request
+        );
     }
 
     // Devolución no encontrada - HTTP 404
     @ExceptionHandler(NoSuchElementException.class)
-    public ResponseEntity<Map<String, String>> manejarNoEncontrado(
-            NoSuchElementException ex) {
+    public ResponseEntity<?> manejarNoEncontrado(
+            NoSuchElementException ex,
+            HttpServletRequest request) {
 
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", ex.getMessage()));
+        return responderError(
+                HttpStatus.NOT_FOUND,
+                "RESOURCE_NOT_FOUND",
+                ex.getMessage(),
+                request
+        );
     }
 
     // Conflicto con el estado actual - HTTP 409
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> manejarConflicto(
-            IllegalStateException ex) {
+    public ResponseEntity<?> manejarConflicto(
+            IllegalStateException ex,
+            HttpServletRequest request) {
 
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(Map.of("error", ex.getMessage()));
+        return responderError(
+                HttpStatus.CONFLICT,
+                "BUSINESS_RULE_VIOLATION",
+                ex.getMessage(),
+                request
+        );
     }
 
 }

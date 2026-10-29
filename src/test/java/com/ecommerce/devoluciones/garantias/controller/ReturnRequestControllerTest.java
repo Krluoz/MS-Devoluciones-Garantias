@@ -123,8 +123,13 @@ class ReturnRequestControllerTest {
 
         mockMvc.perform(get("/api/returns/99"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error")
-                        .value("No se encontro la solicitud de devolucion con ID 99."));
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value(
+                        "No se encontró la solicitud de devolución con ID 99."
+                ))
+                .andExpect(jsonPath("$.path").value("/api/returns/99"));
     }
 
     @Test
