@@ -1,8 +1,12 @@
 package com.ecommerce.devoluciones.garantias.exception;
 
-public class WarrantyBadRequestException extends RuntimeException {
+public class WarrantyBadRequestException extends WarrantyException {
 
     public WarrantyBadRequestException(String message) {
-        super(message);
+        super(WarrantyErrorCode.BAD_REQUEST, message);
+    }
+
+    public WarrantyBadRequestException(WarrantyErrorCode code, String message) {
+        super(code, message);
     }
 }
