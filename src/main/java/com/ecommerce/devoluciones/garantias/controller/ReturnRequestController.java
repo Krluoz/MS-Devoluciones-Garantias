@@ -72,12 +72,14 @@ public class ReturnRequestController {
             @PathVariable
             @Positive(message = "El ID de la solicitud no es válido.") Long id) {
 
-        Optional<ReturnRequest> solicitud = returnRequestService.obtenerSolicitudPorId(id);
+        Optional<ReturnRequest> solicitud =
+                returnRequestService.obtenerSolicitudPorId(id);
 
-        if (solicitud.isEmpty()){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error",
-                            "No se encontro la solicitud de devolucion con ID " + id + "."));
+        if (solicitud.isEmpty()) {
+            throw new java.util.NoSuchElementException(
+                    "No se encontró la solicitud de devolución con ID "
+                            + id + "."
+            );
         }
 
         return ResponseEntity.ok(convertirAResponseDto(solicitud.get()));

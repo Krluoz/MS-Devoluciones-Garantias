@@ -1,5 +1,6 @@
 package com.ecommerce.devoluciones.garantias.service;
 
+import com.ecommerce.devoluciones.garantias.exception.DuplicateReturnRequestException;
 import com.ecommerce.devoluciones.garantias.gateway.OrderGateway;
 import com.ecommerce.devoluciones.garantias.model.ReturnItem;
 import com.ecommerce.devoluciones.garantias.model.ReturnRequest;
@@ -123,7 +124,7 @@ public class ReturnRequestService {
                     );
 
             if (cantidadYaSolicitada > 0) {
-                throw new IllegalArgumentException(
+                throw new DuplicateReturnRequestException(
                         "Ya existe una solicitud de devolución activa para el artículo "
                                 + itemId
                                 + " en el pedido "

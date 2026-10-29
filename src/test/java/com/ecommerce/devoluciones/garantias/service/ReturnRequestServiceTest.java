@@ -1,6 +1,7 @@
 package com.ecommerce.devoluciones.garantias.service;
 
 import com.ecommerce.devoluciones.garantias.dto.ReturnSummaryDTO;
+import com.ecommerce.devoluciones.garantias.exception.DuplicateReturnRequestException;
 import com.ecommerce.devoluciones.garantias.gateway.OrderGateway;
 import com.ecommerce.devoluciones.garantias.gateway.OrderInfo;
 import com.ecommerce.devoluciones.garantias.model.ReturnItem;
@@ -169,8 +170,11 @@ class ReturnRequestServiceTest {
         when(returnBusinessRepository.pedidoValido(100L, 1L)).thenReturn(true);
         when(returnRequestRepository.sumarCantidadSolicitada(eq(100L), eq(25), anyCollection()))
                 .thenReturn(1L);
-        assertTrue(assertThrows(IllegalArgumentException.class,
-                () -> service.crearSolicitud(requestWithItems(1))).getMessage().contains("Ya existe una solicitud"));
+
+        assertTrue(assertThrows(DuplicateReturnRequestException.class,
+                () -> service.crearSolicitud(requestWithItems(1)))
+                .getMessage().contains("Ya existe una solicitud"));
+
         verify(returnBusinessRepository, never()).obtenerProductoDelPedido(anyLong(), anyLong());
     }
 
