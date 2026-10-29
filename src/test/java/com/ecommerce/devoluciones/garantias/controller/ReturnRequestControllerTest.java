@@ -90,7 +90,7 @@ class ReturnRequestControllerTest {
         when(returnRequestService.crearSolicitud(any(ReturnRequest.class)))
                 .thenReturn(solicitud);
 
-        mockMvc.perform(post("/api/returns")
+        mockMvc.perform(post("/api/v1/returns")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))
                 .andExpect(status().isCreated())
@@ -108,7 +108,7 @@ class ReturnRequestControllerTest {
         when(returnRequestService.obtenerSolicitudPorId(1L))
                 .thenReturn(Optional.of(solicitud));
 
-        mockMvc.perform(get("/api/returns/1"))
+        mockMvc.perform(get("/api/v1/returns/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.orderId").value(10))
@@ -121,7 +121,7 @@ class ReturnRequestControllerTest {
         when(returnRequestService.obtenerSolicitudPorId(99L))
                 .thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/returns/99"))
+        mockMvc.perform(get("/api/v1/returns/99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.timestamp").exists())
                 .andExpect(jsonPath("$.status").value(404))
@@ -129,7 +129,7 @@ class ReturnRequestControllerTest {
                 .andExpect(jsonPath("$.message").value(
                         "No se encontró la solicitud de devolución con ID 99."
                 ))
-                .andExpect(jsonPath("$.path").value("/api/returns/99"));
+                .andExpect(jsonPath("$.path").value("/api/v1/returns/99"));
     }
 
     @Test
@@ -142,7 +142,7 @@ class ReturnRequestControllerTest {
                 }
                 """;
 
-        mockMvc.perform(post("/api/returns")
+        mockMvc.perform(post("/api/v1/returns")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonInvalido))
                 .andExpect(status().isBadRequest());
@@ -153,7 +153,7 @@ class ReturnRequestControllerTest {
 
     @Test
     void obtenerSolicitudPorId_conIdCero_debeRetornar400() throws Exception {
-        mockMvc.perform(get("/api/returns/0"))
+        mockMvc.perform(get("/api/v1/returns/0"))
                 .andExpect(status().isBadRequest());
 
         verify(returnRequestService, never()).obtenerSolicitudPorId(0L);
@@ -175,7 +175,7 @@ class ReturnRequestControllerTest {
         when(returnRequestService.obtenerSolicitudPorId(2L))
                 .thenReturn(Optional.of(solicitudSinItems));
 
-        mockMvc.perform(get("/api/returns/2"))
+        mockMvc.perform(get("/api/v1/returns/2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(2))
                 .andExpect(jsonPath("$.items").isArray())
@@ -209,7 +209,7 @@ class ReturnRequestControllerTest {
                 ));
 
         mockMvc.perform(
-                        get("/api/returns/me")
+                        get("/api/v1/returns/me")
                                 .principal(auth)
                                 .with(authentication(auth))
                 )
@@ -240,7 +240,7 @@ class ReturnRequestControllerTest {
                 .thenReturn(Page.empty(PageRequest.of(0, 10)));
 
         mockMvc.perform(
-                        get("/api/returns/me")
+                        get("/api/v1/returns/me")
                                 .principal(auth)
                                 .with(authentication(auth))
                 )
@@ -263,7 +263,7 @@ class ReturnRequestControllerTest {
         recibida.setItems(List.of());
         when(returnRequestService.registrarRecepcion(1L)).thenReturn(recibida);
 
-        mockMvc.perform(patch("/api/returns/admin/1/received"))
+        mockMvc.perform(patch("/api/v1/returns/admin/1/received"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.status").value("RECIBIDO"));

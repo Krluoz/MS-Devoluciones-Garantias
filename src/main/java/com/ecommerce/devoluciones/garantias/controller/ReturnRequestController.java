@@ -26,7 +26,7 @@ import java.util.Optional;
 
 @RestController
 @Validated
-@RequestMapping("api/returns")
+@RequestMapping("api/v1/returns")
 public class ReturnRequestController {
 
     private final ReturnRequestService returnRequestService;
