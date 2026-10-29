@@ -16,6 +16,7 @@ import com.ecommerce.devoluciones.garantias.repository.WarrantyClaimRepository;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyItemRepository;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyClaimStatusResponse;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyDecisionRequest;
+import com.ecommerce.devoluciones.garantias.exception.WarrantyErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,19 +56,20 @@ public class WarrantyClaimService {
 
         // 2. El usuario existe -> 404
         if (!orderGateway.userExists(request.userId())) {
-            throw new WarrantyNotFoundException("El usuario no existe.");
+            throw new WarrantyNotFoundException(WarrantyErrorCode.USER_NOT_FOUND,
+                    "El usuario no existe.");
         }
 
         // 3. La orden existe y es de ese usuario -> 404
         OrderInfo order = orderGateway.findOrder(request.orderId())
                 .filter(o -> o.userId().equals(request.userId()))
-                .orElseThrow(() -> new WarrantyNotFoundException(
+                .orElseThrow(() -> new WarrantyNotFoundException(WarrantyErrorCode.ORDER_NOT_FOUND,
                         "La orden no existe o no pertenece al usuario."));
 
         // 4. La garantía sigue vigente -> 422
         LocalDateTime expiresAt = order.purchaseDate().plusMonths(warrantyMonths);
         if (LocalDateTime.now().isAfter(expiresAt)) {
-            throw new WarrantyRuleException(
+            throw new WarrantyRuleException(WarrantyErrorCode.WARRANTY_EXPIRED,
                     "La garantía de esta orden venció el " + expiresAt.toLocalDate() + ".");
         }
 
@@ -80,7 +82,7 @@ public class WarrantyClaimService {
             OrderItemInfo product = order.items().stream()
                     .filter(i -> i.productId().equals(itemRequest.itemId()))
                     .findFirst()
-                    .orElseThrow(() -> new WarrantyNotFoundException(
+                    .orElseThrow(() -> new WarrantyNotFoundException(WarrantyErrorCode.PRODUCT_NOT_IN_ORDER,
                             "El producto " + itemRequest.itemId()
                                     + " no pertenece a la orden indicada."));
 
@@ -90,7 +92,7 @@ public class WarrantyClaimService {
             long available = product.quantity() - alreadyClaimed;
 
             if (itemRequest.quantity() > available) {
-                throw new WarrantyRuleException(
+                throw new WarrantyRuleException(WarrantyErrorCode.QUANTITY_EXCEEDS_AVAILABLE,
                         "La cantidad solicitada (" + itemRequest.quantity()
                                 + ") supera las unidades disponibles para garantía ("
                                 + available + ") del producto " + itemRequest.itemId() + ".");
@@ -115,7 +117,7 @@ public class WarrantyClaimService {
     @Transactional(readOnly = true)
     public WarrantyClaimStatusResponse getClaimStatus(Long claimId) {
         WarrantyClaim claim = claimRepository.findById(claimId)
-                .orElseThrow(() -> new WarrantyNotFoundException(
+                .orElseThrow(() -> new WarrantyNotFoundException(WarrantyErrorCode.CLAIM_NOT_FOUND,
                         "La reclamación de garantía " + claimId + " no existe."));
 
         return WarrantyClaimStatusResponse.from(claim);
@@ -161,7 +163,7 @@ public class WarrantyClaimService {
         Set<Long> seen = new HashSet<>();
         for (WarrantyItemRequest item : request.items()) {
             if (!seen.add(item.itemId())) {
-                throw new WarrantyBadRequestException(
+                throw new WarrantyBadRequestException(WarrantyErrorCode.DUPLICATE_PRODUCT_IN_REQUEST,
                         "El producto " + item.itemId() + " está repetido en la solicitud.");
             }
         }

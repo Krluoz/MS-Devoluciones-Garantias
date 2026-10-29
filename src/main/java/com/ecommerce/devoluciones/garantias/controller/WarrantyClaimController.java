@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyDecisionRequest;
 
 @RestController
-@RequestMapping("/api/warranties/claims")
+@RequestMapping("/api/v1/warranties/claims")
 public class WarrantyClaimController {
 
     private final WarrantyClaimService claimService;

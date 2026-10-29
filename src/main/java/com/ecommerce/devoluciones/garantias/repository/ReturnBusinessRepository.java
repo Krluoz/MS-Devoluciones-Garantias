@@ -18,7 +18,7 @@ public class ReturnBusinessRepository {
 
     private final Map<Long, Map<Long, List<Object>>> productos = Map.of(
             100L, Map.of(
-                    25L, List.of("Teclado mecánico", 2)
+                    25L, List.of("Teclado mecánico", 3)
             )
     );
 
