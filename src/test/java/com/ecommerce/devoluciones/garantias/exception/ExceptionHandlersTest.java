@@ -136,9 +136,9 @@ class ExceptionHandlersTest {
                 new FieldError("dto", "userId", "mensaje duplicado"),
                 new FieldError("dto", "orderId", "orden inválida"))));
 
-        //assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        //assertEquals("Los datos de la solicitud no son válidos.", response.getBody().get("error"));
-        /*@SuppressWarnings("unchecked")
+        /*assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Los datos de la solicitud no son válidos.", response.getBody().get("error"));
+        @SuppressWarnings("unchecked")
         var details = (java.util.Map<String, String>) response.getBody().get("details");
         assertEquals("Valor inválido", details.get("userId"));
         assertEquals("orden inválida", details.get("orderId"));
