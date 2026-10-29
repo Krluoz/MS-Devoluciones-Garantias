@@ -18,9 +18,8 @@ class DtoCoverageTest {
         assertEquals(2, itemRequest.quantity());
         assertEquals(ReturnReason.ITEM_DEFECTUOSO, itemRequest.reason());
 
-        ReturnRequestCreateDto create = new ReturnRequestCreateDto(10L, 20L, List.of(itemRequest));
+        ReturnRequestCreateDto create = new ReturnRequestCreateDto(10L, List.of(itemRequest));
         assertEquals(10L, create.orderId());
-        assertEquals(20L, create.userId());
         assertEquals(List.of(itemRequest), create.items());
 
         ReturnItemResponseDto itemResponse = new ReturnItemResponseDto(
@@ -63,8 +62,7 @@ class DtoCoverageTest {
         assertEquals(WarrantyReason.DEFECTUOSO, itemRequest.reason());
         assertEquals("No enciende", itemRequest.description());
 
-        WarrantyClaimRequest claimRequest = new WarrantyClaimRequest(1L, 100L, List.of(itemRequest));
-        assertEquals(1L, claimRequest.userId());
+        WarrantyClaimRequest claimRequest = new WarrantyClaimRequest(100L, List.of(itemRequest));
         assertEquals(100L, claimRequest.orderId());
         assertEquals(List.of(itemRequest), claimRequest.items());
 

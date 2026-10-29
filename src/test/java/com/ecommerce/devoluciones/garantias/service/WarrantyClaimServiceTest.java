@@ -12,6 +12,7 @@ import com.ecommerce.devoluciones.garantias.model.WarrantyReason;
 import com.ecommerce.devoluciones.garantias.model.WarrantyStatus;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyClaimRepository;
 import com.ecommerce.devoluciones.garantias.repository.WarrantyItemRepository;
+import com.ecommerce.devoluciones.garantias.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -191,7 +192,7 @@ class WarrantyClaimServiceTest {
         claim.setUpdatedAt(updatedAt);
         when(claimRepository.findById(8L)).thenReturn(Optional.of(claim));
 
-        WarrantyClaimStatusResponse response = warrantyClaimService.getClaimStatus(8L);
+        WarrantyClaimStatusResponse response = warrantyClaimService.getClaimStatus(8L, new AuthenticatedUser(101L, false));
 
         assertEquals(8L, response.id());
         assertEquals(WarrantyStatus.PENDIENTE, response.status());

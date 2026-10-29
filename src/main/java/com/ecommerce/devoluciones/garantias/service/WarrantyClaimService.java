@@ -17,6 +17,7 @@ import com.ecommerce.devoluciones.garantias.repository.WarrantyItemRepository;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyClaimStatusResponse;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyDecisionRequest;
 import com.ecommerce.devoluciones.garantias.exception.WarrantyErrorCode;
+import com.ecommerce.devoluciones.garantias.security.AuthenticatedUser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,20 +50,19 @@ public class WarrantyClaimService {
     }
 
     @Transactional
-    public WarrantyClaimResponse createClaim(WarrantyClaimRequest request) {
-
+    public WarrantyClaimResponse createClaim(Long userId, WarrantyClaimRequest request) {
         // 1. Producto repetido en la lista -> 400
         validateNoDuplicateProducts(request);
 
         // 2. El usuario existe -> 404
-        if (!orderGateway.userExists(request.userId())) {
+        if (!orderGateway.userExists(userId)) {
             throw new WarrantyNotFoundException(WarrantyErrorCode.USER_NOT_FOUND,
                     "El usuario no existe.");
         }
 
         // 3. La orden existe y es de ese usuario -> 404
         OrderInfo order = orderGateway.findOrder(request.orderId())
-                .filter(o -> o.userId().equals(request.userId()))
+                .filter(o -> o.userId().equals(userId))
                 .orElseThrow(() -> new WarrantyNotFoundException(WarrantyErrorCode.ORDER_NOT_FOUND,
                         "La orden no existe o no pertenece al usuario."));
 
@@ -115,13 +115,16 @@ public class WarrantyClaimService {
 
     //Método GET claim por ID
     @Transactional(readOnly = true)
-    public WarrantyClaimStatusResponse getClaimStatus(Long claimId) {
+    public WarrantyClaimStatusResponse getClaimStatus(Long claimId, AuthenticatedUser user) {
         WarrantyClaim claim = claimRepository.findById(claimId)
+                // Un USER solo ve sus reclamos; para él, uno ajeno "no existe"
+                .filter(c -> user.admin() || c.getUserId().equals(user.id()))
                 .orElseThrow(() -> new WarrantyNotFoundException(WarrantyErrorCode.CLAIM_NOT_FOUND,
                         "La reclamación de garantía " + claimId + " no existe."));
 
         return WarrantyClaimStatusResponse.from(claim);
     }
+
     @Transactional
     public WarrantyClaimStatusResponse resolveClaim(Long claimId, WarrantyDecisionRequest request) {
         // 1. Validar que la reclamación exista -> 404 si no existe

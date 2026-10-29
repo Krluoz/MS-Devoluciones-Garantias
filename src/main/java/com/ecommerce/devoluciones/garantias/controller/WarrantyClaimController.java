@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PatchMapping;
 import com.ecommerce.devoluciones.garantias.dto.WarrantyDecisionRequest;
+import com.ecommerce.devoluciones.garantias.security.AuthenticatedUser;
+import org.springframework.security.core.Authentication;
+import java.net.URI;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @RequestMapping("/api/v1/warranties/claims")
@@ -28,17 +32,26 @@ public class WarrantyClaimController {
 
     @PostMapping
     public ResponseEntity<WarrantyClaimResponse> createClaim(
-            @Valid @RequestBody WarrantyClaimRequest request) {
+            @Valid @RequestBody WarrantyClaimRequest request,
+            Authentication authentication) {
 
-        WarrantyClaimResponse created = claimService.createClaim(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        WarrantyClaimResponse created = claimService.createClaim(user.id(), request);
+
+        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(created.id())
+                .toUri();
+
+        return ResponseEntity.created(location).body(created);
     }
     //Método GET para obtener claims por ID
     @GetMapping("/{id}")
     public ResponseEntity<WarrantyClaimStatusResponse> getClaimStatus(
-            @PathVariable("id") Long id) {
+            @PathVariable("id") Long id, Authentication authentication) {
 
-        return ResponseEntity.ok(claimService.getClaimStatus(id));
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return ResponseEntity.ok(claimService.getClaimStatus(id, user));
     }
     @PatchMapping({"/admin/{id}/decision", "/{id}/decision"})
     public ResponseEntity<WarrantyClaimStatusResponse> resolveClaim(
