@@ -2,6 +2,12 @@
 package com.ecommerce.devoluciones.garantias.config;
 
 import com.ecommerce.devoluciones.garantias.exception.WarrantyErrorCode;
+package com.ecommerce.devoluciones.garantias.config;
+
+import com.ecommerce.devoluciones.garantias.exception.WarrantyErrorCode;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;

@@ -49,6 +49,7 @@ class UserIdResolverTest {
         );
     }
 
+
     @Test
     void testResolver_exigeAutenticacionYUsaUsuario101() {
         TestUserIdResolver resolver = new TestUserIdResolver();

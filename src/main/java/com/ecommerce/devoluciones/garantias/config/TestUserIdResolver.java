@@ -1,9 +1,11 @@
 package com.ecommerce.devoluciones.garantias.config;
 
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
+@Primary
 @Component
 @Profile("test")
 public class TestUserIdResolver implements UserIdResolver {

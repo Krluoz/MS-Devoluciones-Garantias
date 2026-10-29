@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -24,7 +25,7 @@ class ExceptionHandlersTest {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
         MockHttpServletRequest request = crearRequest(
-                "POST", "/api/returns"
+                "POST", "/api/v1/returns"
         );
 
         var badRequest = handler.manejarValidacion(
@@ -38,10 +39,10 @@ class ExceptionHandlersTest {
         assertEquals(400, badRequestBody.get("status"));
         assertEquals("INVALID_REQUEST", badRequestBody.get("code"));
         assertEquals("dato inválido", badRequestBody.get("message"));
-        assertEquals("/api/returns", badRequestBody.get("path"));
+        assertEquals("/api/v1/returns", badRequestBody.get("path"));
         assertNotNull(badRequestBody.get("timestamp"));
 
-        request = crearRequest("GET", "/api/returns/99");
+        request = crearRequest("GET", "/api/v1/returns/99");
 
         var missing = handler.manejarNoEncontrado(
                 new java.util.NoSuchElementException("no existe"),
@@ -54,9 +55,9 @@ class ExceptionHandlersTest {
         assertEquals(404, missingBody.get("status"));
         assertEquals("RESOURCE_NOT_FOUND", missingBody.get("code"));
         assertEquals("no existe", missingBody.get("message"));
-        assertEquals("/api/returns/99", missingBody.get("path"));
+        assertEquals("/api/v1/returns/99", missingBody.get("path"));
 
-        request = crearRequest("POST", "/api/returns");
+        request = crearRequest("POST", "/api/v1/returns");
 
         var conflict = handler.manejarConflicto(
                 new IllegalStateException("estado incompatible"),
@@ -82,7 +83,7 @@ class ExceptionHandlersTest {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
         MockHttpServletRequest request = crearRequest(
-                "POST", "/api/returns"
+                "POST", "/api/v1/returns"
         );
 
         var response = handler.manejarErroresDeValidacion(
@@ -124,7 +125,7 @@ class ExceptionHandlersTest {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
         MockHttpServletRequest request = crearRequest(
-                "GET", "/api/returns/0"
+                "GET", "/api/v1/returns/0"
         );
 
         ConstraintViolation<?> violation = mock(ConstraintViolation.class);
@@ -166,13 +167,13 @@ class ExceptionHandlersTest {
     void returnDecisionHandler_construyeCuerpoComunDeError() {
         ReturnDecisionExceptionHandler handler = new ReturnDecisionExceptionHandler();
         HttpServletRequest request = mock(HttpServletRequest.class);
-        when(request.getRequestURI()).thenReturn("/api/admin/returns/8/decision");
+        when(request.getRequestURI()).thenReturn("/api/v1/admin/returns/8/decision");
 
         var invalid = handler.manejarDecisionInvalida(new IllegalArgumentException("decisión inválida"), request);
         assertEquals(HttpStatus.BAD_REQUEST, invalid.getStatusCode());
         assertEquals("INVALID_DECISION", invalid.getBody().get("code"));
         assertEquals("decisión inválida", invalid.getBody().get("message"));
-        assertEquals("/api/admin/returns/8/decision", invalid.getBody().get("path"));
+        assertEquals("/api/v1/admin/returns/8/decision", invalid.getBody().get("path"));
         assertNotNull(invalid.getBody().get("timestamp"));
         assertEquals(400, invalid.getBody().get("status"));
 
@@ -185,7 +186,7 @@ class ExceptionHandlersTest {
         assertEquals("INVALID_RETURN_STATUS", conflict.getBody().get("code"));
     }
 
-    /*@Test
+    @Test
     void returnDecisionHandler_mapeaJsonYValidacion() {
         ReturnDecisionExceptionHandler handler = new ReturnDecisionExceptionHandler();
         HttpServletRequest request = mock(HttpServletRequest.class);
@@ -203,7 +204,9 @@ class ExceptionHandlersTest {
 
         var fallback = handler.manejarValidacion(validationException(List.of()), request);
         assertEquals("Los datos de la solicitud no son válidos", fallback.getBody().get("message"));
-    }*/
+    }
+
+
 
     @Test
     void warrantyHandler_mapeaExcepcionesDeNegocio() {
@@ -228,6 +231,7 @@ class ExceptionHandlersTest {
         assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
         assertEquals("decisión incorrecta", badRequest.getBody().message());
     }
+
 
     @Test
     void warrantyHandler_mapeaValidacionJsonInvalidoYErrorInesperado() {
@@ -264,6 +268,8 @@ class ExceptionHandlersTest {
                 unexpected.getBody().message());
         assertEquals("/api/warranties/claims", unexpected.getBody().path());
     }
+
+
 
     private MethodArgumentNotValidException validationException(List<FieldError> errors) {
         BindingResult result = mock(BindingResult.class);
