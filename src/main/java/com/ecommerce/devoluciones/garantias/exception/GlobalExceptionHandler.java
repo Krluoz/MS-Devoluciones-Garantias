@@ -25,13 +25,13 @@ public class GlobalExceptionHandler {
 
         // POST /api/returns
         if ("POST".equals(metodo)
-                && "/api/returns".equals(ruta)) {
+                && "/api/v1/returns".equals(ruta)) {
             return true;
         }
 
         // GET /api/returns/{id}
         return "GET".equals(metodo)
-                && ruta.matches("/api/returns/\\d+");
+                && ruta.matches("/api/v1/returns/\\d+");
     }
 
     private ResponseEntity<Map<String, Object>> construirRespuestaError(

@@ -1,4 +1,3 @@
-
 package com.ecommerce.devoluciones.garantias.config;
 
 import com.ecommerce.devoluciones.garantias.security.AuthenticatedUser;
