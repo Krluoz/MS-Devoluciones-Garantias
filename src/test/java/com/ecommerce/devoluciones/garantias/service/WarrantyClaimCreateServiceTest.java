@@ -88,6 +88,10 @@ class WarrantyClaimCreateServiceTest {
         assertThat(response.orderId()).isEqualTo(100L);
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).itemName()).isEqualTo("Teclado mecánico");
+        assertThat(response.items().get(0).reason()).isEqualTo(WarrantyReason.DEFECTUOSO);
+        assertThat(response.items().get(0).description()).isEqualTo("No funciona");
+        assertThat(response.items().get(0).purchaseDate()).isNotNull();
+        assertThat(response.items().get(0).warrantyExpiresAt()).isAfter(response.items().get(0).purchaseDate());
         verify(claimRepository).save(any(WarrantyClaim.class));
     }
 

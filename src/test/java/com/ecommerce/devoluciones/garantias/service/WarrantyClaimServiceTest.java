@@ -153,4 +153,77 @@ class WarrantyClaimServiceTest {
 
         verify(claimRepository, never()).save(any());
     }
+
+    @Test
+    void debeLanzarExcepcionCuandoLaSolicitudDeDecisionEsNula() {
+        WarrantyClaim claim = new WarrantyClaim(100L, 101L);
+        claim.setId(6L);
+        claim.setStatus(WarrantyStatus.PENDIENTE);
+        when(claimRepository.findById(6L)).thenReturn(Optional.of(claim));
+
+        assertThrows(WarrantyBadRequestException.class,
+                () -> warrantyClaimService.resolveClaim(6L, null));
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    void debeAceptarDecisionDesdeCampoStatusCuandoDecisionEsNula() {
+        WarrantyClaim claim = new WarrantyClaim(100L, 101L);
+        claim.setId(7L);
+        claim.setStatus(WarrantyStatus.PENDIENTE);
+        when(claimRepository.findById(7L)).thenReturn(Optional.of(claim));
+        when(claimRepository.save(any(WarrantyClaim.class))).thenAnswer(i -> i.getArgument(0));
+
+        WarrantyDecisionRequest request =
+                new WarrantyDecisionRequest(null, WarrantyStatus.RECHAZADO, "Motivo alternativo");
+        WarrantyClaimStatusResponse result = warrantyClaimService.resolveClaim(7L, request);
+
+        assertEquals(WarrantyStatus.RECHAZADO, result.status());
+        verify(claimRepository).save(claim);
+    }
+
+    @Test
+    void debeCubrirLaConversiónDeEstadoDeReclamacionConFechaActualizada() {
+        LocalDateTime updatedAt = LocalDateTime.now();
+        WarrantyClaim claim = new WarrantyClaim(100L, 101L);
+        claim.setId(8L);
+        claim.setStatus(WarrantyStatus.PENDIENTE);
+        claim.setUpdatedAt(updatedAt);
+        when(claimRepository.findById(8L)).thenReturn(Optional.of(claim));
+
+        WarrantyClaimStatusResponse response = warrantyClaimService.getClaimStatus(8L);
+
+        assertEquals(8L, response.id());
+        assertEquals(WarrantyStatus.PENDIENTE, response.status());
+        assertEquals(updatedAt, response.updatedAt());
+    }
+
+
+    @Test
+    void debeRechazarDecisionPendientePorqueNoEsUnaResolucionFinal() {
+        WarrantyClaim claim = new WarrantyClaim(100L, 101L);
+        claim.setId(10L);
+        claim.setStatus(WarrantyStatus.PENDIENTE);
+        when(claimRepository.findById(10L)).thenReturn(Optional.of(claim));
+        WarrantyDecisionRequest request = new WarrantyDecisionRequest(WarrantyStatus.PENDIENTE, null, null);
+
+        assertThrows(WarrantyBadRequestException.class,
+                () -> warrantyClaimService.resolveClaim(10L, request));
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    void debeAprobarReclamacionPendienteSinItemsVencidos() {
+        WarrantyClaim claim = new WarrantyClaim(100L, 101L);
+        claim.setId(11L);
+        claim.setStatus(WarrantyStatus.PENDIENTE);
+        when(claimRepository.findById(11L)).thenReturn(Optional.of(claim));
+        when(claimRepository.save(any(WarrantyClaim.class))).thenAnswer(i -> i.getArgument(0));
+
+        WarrantyClaimStatusResponse response = warrantyClaimService.resolveClaim(
+                11L, new WarrantyDecisionRequest(WarrantyStatus.APROBADO, null, null));
+
+        assertEquals(WarrantyStatus.APROBADO, response.status());
+        verify(claimRepository).save(claim);
+    }
 }

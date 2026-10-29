@@ -28,10 +28,21 @@ public class StubOrderGateway implements OrderGateway {
                 100L, new OrderInfo(100L, 1L, now.minusMonths(1), List.of(
                         new OrderItemInfo(25L, "Teclado mecánico", 2),
                         new OrderItemInfo(30L, "Mouse inalámbrico", 3))),
+
                 101L, new OrderInfo(101L, 1L, now.minusMonths(5), List.of(
                         new OrderItemInfo(25L, "Teclado mecánico", 2))),
+
                 200L, new OrderInfo(200L, 2L, now.minusDays(10), List.of(
-                        new OrderItemInfo(40L, "Monitor 24 pulgadas", 1)))
+                        new OrderItemInfo(40L, "Monitor 24 pulgadas", 1))),
+
+                300L, new OrderInfo(300L, 1L, now.minusDays(5), List.of(
+                        new OrderItemInfo(25L, "Teclado mecánico", 5))),
+
+                301L, new OrderInfo(301L, 2L, now.minusDays(10), List.of(
+                        new OrderItemInfo(30L, "Mouse inalámbrico", 3))),
+
+                302L, new OrderInfo(302L, 1L, now.minusDays(2), List.of(
+                        new OrderItemInfo(40L, "Monitor 24 pulgadas", 2)))
         );
 
         return Optional.ofNullable(orders.get(orderId));
